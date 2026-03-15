@@ -80,17 +80,6 @@ function RoomPage() {
       setLoading(false);
     });
 
-    // Fetch initial room data via REST API (in case we missed the socket event)
-    api.getRoom(code)
-      .then(data => {
-        setRoom(data.room);
-        setLoading(false);
-      })
-      .catch(err => {
-        setError('Room not found');
-        setLoading(false);
-      });
-
     // --- Cleanup function ---
     // This runs when the component "unmounts" (user leaves the page).
     // We disconnect event listeners to prevent memory leaks.

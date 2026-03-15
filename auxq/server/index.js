@@ -252,11 +252,12 @@ io.on('connection', (socket) => {
     // Add user to the room's user list if they're not already there
     if (!room.users.includes(userName)) {
       room.users.push(userName);
+      console.log(`${userName} joined room ${code}`);
     }
 
-    // Tell everyone in the room that someone joined
-    io.to(code).emit('room-updated', room);
-    console.log(`${userName} joined room ${code}`);
+    // Tell others someone joined, and send room data back to the joiner
+    socket.to(code).emit('room-updated', room);
+    socket.emit('room-updated', room);
   });
 
   // User adds a song to the queue
