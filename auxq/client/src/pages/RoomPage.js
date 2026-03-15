@@ -157,14 +157,13 @@ const handlePause = useCallback(async () => {
 
   const handleSkip = useCallback(async () => {
   try {
-    // Get the next song in the queue (index 1, since index 0 is current)
-    const nextSong = room?.queue?.[1];
-    await api.skipSpotify(code, nextSong?.spotifyUri);
+    // Tell the server to advance the queue and play the next song.
+    // The server's advanceQueue() handles both the Spotify call and room state.
     socket.emit('next-song', { code });
   } catch (err) {
     setError(err.message);
   }
-}, [code, room]);
+}, [code]);
 
   // --- Connect Spotify (host only) ---
   async function handleConnectSpotify() {

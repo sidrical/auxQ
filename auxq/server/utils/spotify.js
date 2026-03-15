@@ -340,6 +340,7 @@ async function getTrack(accessToken, trackId) {
 
 
 module.exports = {
+  // Original names (keep these — used internally)
   getAuthURL,
   getTokens,
   refreshAccessToken,
@@ -351,5 +352,10 @@ module.exports = {
   getPlaybackState,
   parseSpotifyLink,
   getTrack,
-  getDevices
+  getDevices,
+
+  // Aliases so spotify-routes.js works without changes
+  getAuthUrl: getAuthURL,
+  exchangeCodeForTokens: getTokens,
+  getCurrentlyPlaying: getPlaybackState,
 };

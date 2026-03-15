@@ -7,6 +7,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const { getPlaybackState, playTrack } = require('./utils/spotify');
 
 // Initialize Express app
 const app = express();
@@ -41,6 +42,128 @@ app.use(express.json());
 // Later, we'll move this to MongoDB for persistence.
 const rooms = {};
 
+// --- Auto-advance polling ---
+// Each room gets its own polling interval stored here.
+// Key = room code, Value = the interval timer ID (so we can cancel it later)
+const roomPollers = {};
+
+// How often we check Spotify (in milliseconds).
+// 3 seconds is frequent enough to feel instant, slow enough not to hammer the API.
+const POLL_INTERVAL_MS = 3000;
+
+// Start polling Spotify for a specific room.
+// Called when a song starts playing.
+function startPolling(roomCode) {
+  // Don't start a second poller if one's already running for this room
+  if (roomPollers[roomCode]) return;
+
+  console.log(`[Poller] Starting for room ${roomCode}`);
+
+  roomPollers[roomCode] = setInterval(async () => {
+    const room = rooms[roomCode];
+
+    // If the room no longer exists, clean up and stop
+    if (!room) {
+      stopPolling(roomCode);
+      return;
+    }
+
+    // If AuxQ thinks nothing is playing, nothing to check
+    if (!room.currentTrack) return;
+
+    try {
+      const token = await getValidToken(roomCode);
+      const state = await getPlaybackState(token);
+
+      // Spotify returned nothing — device is idle, do nothing
+      if (!state || !state.currentTrack) return;
+
+      // --- Case 1: Song ended naturally ---
+      // Spotify reports not playing AND progress is near zero.
+      // "Near zero" = under 3 seconds. We use 3000ms as the threshold.
+      const songEndedNaturally = !state.isPlaying && state.currentTrack.progressMs < 3000;
+
+      // --- Case 2: Different song is playing in Spotify ---
+      // This catches the case where Spotify moved on but AuxQ didn't know
+      const inGracePeriod = Date.now() - (room._pollStartedAt || 0) < 5000;
+      const unexpectedTrack = !inGracePeriod && state.currentTrack.spotifyId !== room.currentTrack.spotifyId;
+
+      if (songEndedNaturally || unexpectedTrack) {
+        console.log(`[Poller] Song ended in room ${roomCode}, advancing queue`);
+        advanceQueue(roomCode);
+        return;
+      }
+
+      // --- Case 3: User paused Spotify directly ---
+      // Spotify says not playing, but the song is mid-way through
+      // This means the user hit pause on their Spotify app
+      if (!state.isPlaying && room.isPlaying) {
+        console.log(`[Poller] Playback paused externally in room ${roomCode}`);
+        room.isPlaying = false;
+        io.to(roomCode).emit('room-updated', room);
+        return;
+      }
+
+      // --- Case 4: User resumed Spotify directly ---
+      if (state.isPlaying && !room.isPlaying) {
+        console.log(`[Poller] Playback resumed externally in room ${roomCode}`);
+        room.isPlaying = true;
+        io.to(roomCode).emit('room-updated', room);
+        return;
+      }
+
+      // --- Default: playing normally, do nothing ---
+
+    } catch (err) {
+      // Don't crash the poller on a single failed request — just log and continue
+      console.error(`[Poller] Error in room ${roomCode}:`, err.message);
+    }
+  }, POLL_INTERVAL_MS);
+}
+
+// Stop polling for a room (when room is empty, destroyed, or nothing is playing)
+function stopPolling(roomCode) {
+  if (roomPollers[roomCode]) {
+    clearInterval(roomPollers[roomCode]);
+    delete roomPollers[roomCode];
+    console.log(`[Poller] Stopped for room ${roomCode}`);
+  }
+}
+
+// Advance the queue and play the next song.
+// This is extracted so both the skip button AND the poller can call it.
+async function advanceQueue(roomCode) {
+  const room = rooms[roomCode];
+  if (!room) return;
+
+  // Remove the song that just finished
+  room.queue.shift();
+  room.currentTrack = room.queue[0] || null;
+  room._pollStartedAt = Date.now();
+
+  if (room.currentTrack) {
+    // There's a next song — play it
+    room.isPlaying = true;
+    io.to(roomCode).emit('room-updated', room);
+
+    try {
+      const token = await getValidToken(roomCode);
+      await playTrack(token, room.currentTrack.spotifyUri);
+      console.log(`[Poller] Now playing: ${room.currentTrack.title}`);
+    } catch (err) {
+      console.error(`[Poller] Failed to play next track:`, err.message);
+      room.isPlaying = false;
+      io.to(roomCode).emit('room-updated', room);
+    }
+  } else {
+    // Queue is empty
+    room.isPlaying = false;
+    stopPolling(roomCode);
+    io.to(roomCode).emit('room-updated', room);
+    console.log(`[Poller] Queue empty in room ${roomCode}`);
+  }
+}
+
 // --- Helper: Generate a 4-digit room code ---
 function generateRoomCode() {
   // Keep generating until we find a code that's not already in use
@@ -55,6 +178,7 @@ function generateRoomCode() {
 // As your app grows, you don't want ALL your endpoints in one file.
 // Instead, you organize them into separate "route" files and plug them in here.
 const spotifyRoutes = require('./routes/spotify-routes');
+const { getValidToken } = spotifyRoutes;
 const appleMusicRoutes = require('./routes/apple-music-routes');
 
 // This tells Express: "Any request starting with /api/spotify should be handled
@@ -159,16 +283,13 @@ socket.on('add-song', ({ code, song }) => {
 });
 
   // Host skips to next song
-  socket.on('next-song', ({ code }) => {
-    const room = rooms[code];
-    if (!room) return;
+socket.on('next-song', ({ code }) => {
+  const room = rooms[code];
+  if (!room) return;
 
-    // Remove the first song from the queue (it just finished playing)
-    room.queue.shift();
-    room.currentTrack = room.queue[0] || null;
-
-    io.to(code).emit('room-updated', room);
-  });
+  // Use advanceQueue so skip and auto-advance share the same logic
+  advanceQueue(code);
+});
 
   // Host toggles play/pause
   socket.on('toggle-playback', ({ code }) => {
@@ -184,7 +305,9 @@ socket.on('play-started', ({ code }) => {
   const room = rooms[code];
   if (!room) return;
   room.isPlaying = true;
+  room._pollStartedAt = Date.now();  // ← add this
   io.to(code).emit('room-updated', room);
+  startPolling(code);
 });
 
 // Host paused
@@ -193,6 +316,8 @@ socket.on('pause-started', ({ code }) => {
   if (!room) return;
   room.isPlaying = false;
   io.to(code).emit('room-updated', room);
+  // Stop polling while paused — no need to check a paused song
+  stopPolling(code);
 });
 
   // User disconnects
