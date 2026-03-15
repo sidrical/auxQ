@@ -7,7 +7,7 @@
 
 import React from 'react';
 
-function NowPlaying({ track, isPlaying, isHost, onPlay, onPause, onSkip }) {
+function NowPlaying({ track, isPlaying, isHost, onPlay, onPause, onSkip, onBack }) {
   if (!track) return null;
 
   return (
@@ -33,7 +33,7 @@ function NowPlaying({ track, isPlaying, isHost, onPlay, onPause, onSkip }) {
       {/* Host-only playback controls */}
       {isHost && (
         <div className="controls">
-          <button className="ctrl-btn" title="Previous" disabled>
+          <button className="ctrl-btn" onClick={onBack} title="Restart">
             ⏮
           </button>
           <button

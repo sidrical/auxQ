@@ -165,6 +165,15 @@ const handlePause = useCallback(async () => {
   }
 }, [code]);
 
+const handleBack = useCallback(async () => {
+  try {
+    await api.playOnSpotify(code, room?.currentTrack?.spotifyUri);
+    socket.emit('play-started', { code });
+  } catch (err) {
+    setError(err.message);
+  }
+}, [code, room]);
+
   // --- Connect Spotify (host only) ---
   async function handleConnectSpotify() {
     try {
@@ -267,6 +276,7 @@ const handlePause = useCallback(async () => {
           onPlay={handlePlay}
           onPause={handlePause}
           onSkip={handleSkip}
+          onBack={handleBack}
         />
       )}
 
