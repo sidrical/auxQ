@@ -33,7 +33,7 @@ function NowPlaying({ track, isPlaying, isHost, onPlay, onPause, onSkip }) {
       {/* Host-only playback controls */}
       {isHost && (
         <div className="controls">
-          <button className="ctrl-btn" onClick={onSkip} title="Previous">
+          <button className="ctrl-btn" title="Previous" disabled>
             ⏮
           </button>
           <button
