@@ -179,6 +179,22 @@ socket.on('add-song', ({ code, song }) => {
     io.to(code).emit('room-updated', room);
   });
 
+  // Host started playing
+socket.on('play-started', ({ code }) => {
+  const room = rooms[code];
+  if (!room) return;
+  room.isPlaying = true;
+  io.to(code).emit('room-updated', room);
+});
+
+// Host paused
+socket.on('pause-started', ({ code }) => {
+  const room = rooms[code];
+  if (!room) return;
+  room.isPlaying = false;
+  io.to(code).emit('room-updated', room);
+});
+
   // User disconnects
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id}`);

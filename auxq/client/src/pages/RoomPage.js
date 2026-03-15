@@ -139,16 +139,17 @@ useEffect(() => {
     await api.playOnSpotify(code, uri);
     setRoom(prev => prev ? { ...prev, isPlaying: true } : prev);
     setHasStarted(true);
+    socket.emit('play-started', { code }); // ← add this
   } catch (err) {
     setError(err.message);
   }
 }, [code, room, hasStarted]);
 
-  const handlePause = useCallback(async () => {
+const handlePause = useCallback(async () => {
   try {
     await api.pauseSpotify(code);
-    // Update local state immediately so the button switches
     setRoom(prev => prev ? { ...prev, isPlaying: false } : prev);
+    socket.emit('pause-started', { code }); // ← add this
   } catch (err) {
     setError(err.message);
   }
