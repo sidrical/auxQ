@@ -236,6 +236,32 @@ async function playTrack(accessToken, spotifyUri) {
   throw new Error(`Playback error: ${data.error?.message || 'Unknown error'}`);
 }
 
+// --- Pause playback ---
+async function pausePlayback(accessToken) {
+  const devices = await getDevices(accessToken);
+  const device = devices.find(d => d.is_active) || devices[0];
+
+  const url = device
+    ? `${SPOTIFY_API}/me/player/pause?device_id=${device.id}`
+    : `${SPOTIFY_API}/me/player/pause`;
+
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${accessToken}` }
+  });
+
+  if (response.status === 204) return { success: true };
+
+  const text = await response.text();
+  if (!text || text.trim() === '') return { success: true };
+
+  try {
+    const data = JSON.parse(text);
+    throw new Error(`Pause error: ${data.error?.message || 'Unknown error'}`);
+  } catch {
+    return { success: true };
+  }
+}
 
 // --- Skip to next track ---
 async function skipToNext(accessToken) {
