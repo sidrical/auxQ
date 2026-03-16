@@ -79,14 +79,19 @@
 }
 
 .connect-btn {
-  padding: 6px 14px;
-  border-radius: var(--radius-sm);
   background: #1DB954;
   color: white;
   border: none;
-  font-size: 12px;
-  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 00;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.connect-btn:hover {
+  background: #1aa34a;
 }
 
 /* --- Tab Bar --- */
