@@ -81,7 +81,7 @@ function startPolling(roomCode) {
       // --- Case 1: Song ended naturally ---
       // Spotify reports not playing AND progress is near zero.
       // "Near zero" = under 3 seconds. We use 3000ms as the threshold.
-      const songEndedNaturally = !state.isPlaying && state.currentTrack.progressMs < 3000;
+      const songEndedNaturally = !state.isPlaying && state.currentTrack.progressMs < 3000 && room.isPlaying;
 
       // --- Case 2: Different song is playing in Spotify ---
       // This catches the case where Spotify moved on but AuxQ didn't know
