@@ -7,6 +7,7 @@
 const express = require('express');
 const router = express.Router();
 const spotify = require('../utils/spotify');
+const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
 
 // We'll store host tokens in memory for now, keyed by room code.
 // In production, you'd store these more securely.
@@ -44,12 +45,12 @@ router.get('/callback', async (req, res) => {
 
   // If the user denied permission
   if (error) {
-    return res.redirect(`http://localhost:3000/?error=spotify_denied`);
-  }
+    return res.redirect(`${clientUrl}/?error=spotify_denied`);
+}
 
   if (!code || !roomCode) {
-    return res.redirect(`/?error=missing_params`);
-  }
+    return res.redirect(`${clientUrl}/?error=missing_params`);
+}
 
   try {
     // Exchange the authorization code for access + refresh tokens
@@ -64,10 +65,10 @@ router.get('/callback', async (req, res) => {
     };
 
     // Redirect the host back to their room in the app
-    res.redirect(`http://localhost:3000/room/${roomCode}?spotify=connected`);
+    res.redirect(`${clientUrl}/room/${roomCode}?spotify=connected`);
   } catch (err) {
     console.error('Spotify callback error:', err);
-    res.redirect(`http://localhost:3000/room/${roomCode}?error=spotify_auth_failed`);
+    res.redirect(`${clientUrl}/room/${roomCode}?error=spotify_auth_failed`);
   }
 });
 
