@@ -128,3 +128,38 @@ body {
   background: var(--color-apple-bg);
   color: #9B1B22;
 }
+
+.badge-user {
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+}
+
+/* Dark mode — swaps all CSS variables when data-theme="dark" is on <html> */
+[data-theme="dark"] {
+  --color-bg: #1C1C1E;
+  --color-bg-secondary: #2C2C2E;
+  --color-text: #F2F2F7;
+  --color-text-secondary: #ABABAB;
+  --color-text-hint: #6B6B6B;
+  --color-border: #38383A;
+  --color-primary-light: #2D2A5E;
+  --color-spotify-bg: #1A3D25;
+  --color-apple-bg: #3D1A1C;
+}
+
+/* The toggle button — fixed in top-right corner */
+.theme-toggle {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: background 0.2s;
+  line-height: 1;
+}
+
+.theme-toggle:hover {
+  background: var(--color-bg-secondary);
+}

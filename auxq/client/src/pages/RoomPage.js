@@ -26,6 +26,7 @@ import Search from '../components/Search';
 import PasteLink from '../components/PasteLink';
 import NowPlaying from '../components/NowPlaying';
 import '../styles/room.css';
+import useDarkMode from '../utils/useDarkMode';
 
 function RoomPage() {
   // --- Read URL params and navigation state ---
@@ -53,6 +54,7 @@ function RoomPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [hasStarted, setHasStarted] = useState(false);
+  const { theme, toggle } = useDarkMode();
 
   // --- Connect to room on mount ---
   // useEffect with an empty dependency array [] runs ONCE when the component mounts.
@@ -221,7 +223,12 @@ const handleBack = useCallback(async () => {
             ))}
           </div>
         </div>
-        <button className="leave-btn" onClick={handleLeave}>Leave</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button className="theme-toggle" onClick={toggle}>
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
+          <button className="leave-btn" onClick={handleLeave}>Leave</button>
+        </div>
       </div>
 
       {/* Spotify connection prompt (host only) */}

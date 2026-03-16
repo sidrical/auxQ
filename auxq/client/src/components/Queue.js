@@ -45,7 +45,7 @@ function Queue({ queue, onAddClick }) {
             <div className="song-title">{song.title}</div>
             <div className="song-artist">{song.artist}</div>
             <div className="song-meta">
-              Added by {song.addedBy}
+              <span className="badge badge-user">{song.addedBy}</span>
               <span className={`badge ${song.source === 'spotify' ? 'badge-spotify' : 'badge-apple'}`}>
                 {song.source === 'spotify' ? 'Spotify' : 'Apple'}
               </span>
