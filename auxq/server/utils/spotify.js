@@ -17,7 +17,7 @@ const querystring = require('querystring');
 // These come from your .env file (which reads from developer.spotify.com)
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
-const REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI || 'https://localhost:3001/api/spotify/callback';
+const REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:3001/api/spotify/callback';
 
 // Scopes define what permissions your app is asking for.
 // Think of it like checkboxes on a permission slip.
