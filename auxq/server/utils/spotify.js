@@ -195,6 +195,7 @@ async function getDevices(accessToken) {
 // --- Play a specific track ---
 async function playTrack(accessToken, spotifyUri) {
   const devices = await getDevices(accessToken);
+  console.log('Devices:', JSON.stringify(devices));
   const activeDevice = devices.find(d => d.is_active);
   const fallbackDevice = devices[0];
 
