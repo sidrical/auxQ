@@ -277,6 +277,7 @@ socket.on('add-song', ({ code, song }) => {
 
   if (!room.currentTrack) {
     room.currentTrack = room.queue[0];
+    room.queue.shift();
   }
 
   io.to(code).emit('room-updated', room);

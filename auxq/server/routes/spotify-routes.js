@@ -143,15 +143,45 @@ router.post('/play', async (req, res) => {
   try {
     const token = await getValidToken(roomCode);
 
+    // Step 1: Get available devices
+    const devicesRes = await fetch('https://api.spotify.com/v1/me/player/devices', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const devicesData = await devicesRes.json();
+    const devices = devicesData.devices || [];
+
+
+    // Step 2: Find an active device, or fall back to any available one
+    const activeDevice = devices.find(d => d.is_active);
+    const fallbackDevice = devices[0];
+
+    if (!activeDevice && !fallbackDevice) {
+      // No devices at all — Spotify isn't open anywhere
+      return res.status(404).json({ error: 'No Spotify device found. Open Spotify on any device first.' });
+    }
+
+    // Step 3: If no device is active, transfer playback to wake it up
+    if (!activeDevice && fallbackDevice) {
+      await fetch('https://api.spotify.com/v1/me/player', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ device_ids: [fallbackDevice.id], play: false })
+      });
+      // Give Spotify 600ms to register the transfer before we send play
+      await new Promise(r => setTimeout(r, 600));
+    }
+
+    // Step 4: Now play
     if (spotifyUri) {
       await spotify.playTrack(token, spotifyUri);
     } else {
-      // Resume without restarting — no body means "just resume"
       const response = await fetch('https://api.spotify.com/v1/me/player/play', {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      // 204 = success with no content
       if (response.status !== 204 && !response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.error?.message || 'Playback error');

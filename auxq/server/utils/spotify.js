@@ -195,11 +195,28 @@ async function getDevices(accessToken) {
 // --- Play a specific track ---
 async function playTrack(accessToken, spotifyUri) {
   const devices = await getDevices(accessToken);
-  const device = devices.find(d => d.is_active) || devices[0];
+  const activeDevice = devices.find(d => d.is_active);
+  const fallbackDevice = devices[0];
 
-  if (!device) {
+  if (!activeDevice && !fallbackDevice) {
     throw new Error('No Spotify device found. Open Spotify on any device first.');
   }
+
+  // If no active device, transfer playback to wake it up first
+  if (!activeDevice && fallbackDevice) {
+    await fetch(`${SPOTIFY_API}/me/player`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ device_ids: [fallbackDevice.id], play: false })
+    });
+    // Give Spotify a moment to register the transfer
+    await new Promise(r => setTimeout(r, 600));
+  }
+
+  const device = activeDevice || fallbackDevice;
 
   const response = await fetch(`${SPOTIFY_API}/me/player/play?device_id=${device.id}`, {
     method: 'PUT',
@@ -217,34 +234,6 @@ async function playTrack(accessToken, spotifyUri) {
 
   const data = JSON.parse(text);
   throw new Error(`Playback error: ${data.error?.message || 'Unknown error'}`);
-}
-
-
-// --- Pause playback ---
-async function pausePlayback(accessToken) {
-  const devices = await getDevices(accessToken);
-  const device = devices.find(d => d.is_active) || devices[0];
-
-  const url = device
-    ? `${SPOTIFY_API}/me/player/pause?device_id=${device.id}`
-    : `${SPOTIFY_API}/me/player/pause`;
-
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Authorization': `Bearer ${accessToken}` }
-  });
-
-  if (response.status === 204) return { success: true };
-
-  const text = await response.text();
-  if (!text || text.trim() === '') return { success: true };
-
-  try {
-    const data = JSON.parse(text);
-    throw new Error(`Pause error: ${data.error?.message || 'Unknown error'}`);
-  } catch {
-    return { success: true };
-  }
 }
 
 
