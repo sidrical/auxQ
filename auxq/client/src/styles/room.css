@@ -85,7 +85,7 @@
   padding: 8px 16px;
   border-radius: var(--radius-md);
   font-size: 13px;
-  font-weight: 00;
+  font-weight: 400;
   cursor: pointer;
   white-space: nowrap;
 }

@@ -128,11 +128,12 @@ function HomePage() {
                   return;
                 }
                 setError('');
-                setMode('create');
+                handleCreateRoom();
               }}
+              disabled={loading}
               style={{ marginTop: 16 }}
             >
-              Create a room
+              {loading ? 'Creating...' : 'Create a room'}
             </button>
 
             <button
