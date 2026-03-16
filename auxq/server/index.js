@@ -317,8 +317,6 @@ socket.on('pause-started', ({ code }) => {
   if (!room) return;
   room.isPlaying = false;
   io.to(code).emit('room-updated', room);
-  // Stop polling while paused — no need to check a paused song
-  stopPolling(code);
 });
 
   // User disconnects

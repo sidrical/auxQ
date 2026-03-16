@@ -35,8 +35,11 @@
   gap: 4px;
   padding: 3px 10px;
   border-radius: 20px;
-  background: var(--color-bg-secondary);
+  background: rgba(255, 255, 255, 0.08);
   font-size: 12px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  letter-spacing: 0.2px;
 }
 
 .user-dot {
@@ -454,4 +457,33 @@
   cursor: pointer;
   max-width: 360px;
   text-align: center;
+}
+
+/* --- Badges --- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.badge-user {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.badge-spotify {
+  background: rgba(29, 185, 84, 0.15);
+  color: #1ed760;
+  border: 1px solid rgba(29, 185, 84, 0.25);
+}
+
+.badge-apple {
+  background: rgba(252, 60, 68, 0.15);
+  color: #fc6c70;
+  border: 1px solid rgba(252, 60, 68, 0.25);
 }

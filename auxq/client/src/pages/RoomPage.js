@@ -60,38 +60,30 @@ function RoomPage() {
   // useEffect with an empty dependency array [] runs ONCE when the component mounts.
   // This is where we set up our WebSocket connection and join the room.
   useEffect(() => {
-    // Connect the socket if not already connected
-    if (!socket.connected) {
-      socket.connect();
-    }
+  if (!socket.connected) {
+    socket.connect();
+  }
 
-    // Tell the server we want to join this room
-    socket.emit('join-room', { code, userName });
+  socket.emit('join-room', { code, userName });
 
-    // Listen for room updates from the server.
-    // Every time anyone in the room does something (add song, join, etc.),
-    // the server sends an updated room object to EVERYONE.
-    socket.on('room-updated', (updatedRoom) => {
-      setRoom(updatedRoom);
-      setLoading(false);
-    });
+  const handleRoomUpdated = (updatedRoom) => {
+    setRoom(updatedRoom);
+    setLoading(false);
+  };
 
-    // Listen for errors
-    socket.on('error', (err) => {
-      setError(err.message);
-      setLoading(false);
-    });
+  const handleError = (err) => {
+    setError(err.message);
+    setLoading(false);
+  };
 
-    // --- Cleanup function ---
-    // This runs when the component "unmounts" (user leaves the page).
-    // We disconnect event listeners to prevent memory leaks.
-    // "Memory leak" = your app keeps listening for events that no longer matter,
-    // which slows things down over time.
-    return () => {
-      socket.off('room-updated');
-      socket.off('error');
-    };
-  }, [code, userName]);  // Only re-run if code or userName changes
+  socket.on('room-updated', handleRoomUpdated);
+  socket.on('error', handleError);
+
+  return () => {
+    socket.off('room-updated', handleRoomUpdated);
+    socket.off('error', handleError);
+  };
+}, [code, userName]);
 
   // --- Check Spotify connection status ---
   useEffect(() => {
@@ -160,6 +152,11 @@ const handleBack = useCallback(async () => {
   try {
     await api.playOnSpotify(code, room?.currentTrack?.spotifyUri);
     socket.emit('play-started', { code });
+
+    if (!room?.isPlaying) {
+      await api.pauseSpotify(code);
+      socket.emit('pause-started', { code });
+    }
   } catch (err) {
     setError(err.message);
   }
