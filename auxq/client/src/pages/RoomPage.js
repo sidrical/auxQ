@@ -117,16 +117,16 @@ useEffect(() => {
 
   // --- Playback controls (host only) ---
   const handlePlay = useCallback(async () => {
-  try {
-    const uri = hasStarted ? null : room?.currentTrack?.spotifyUri;
-    await api.playOnSpotify(code, uri);
-    setRoom(prev => prev ? { ...prev, isPlaying: true } : prev);
-    setHasStarted(true);
-    socket.emit('play-started', { code }); // ← add this
-  } catch (err) {
-    setError(err.message);
-  }
-}, [code, room, hasStarted]);
+    try {
+      const uri = room?.currentTrack?.spotifyUri;
+      await api.playOnSpotify(code, uri);
+      setRoom(prev => prev ? { ...prev, isPlaying: true } : prev);
+      setHasStarted(true);
+      socket.emit('play-started', { code });
+    } catch (err) {
+      setError(err.message);
+    }
+  }, [code, room]);
 
 const handlePause = useCallback(async () => {
   try {
