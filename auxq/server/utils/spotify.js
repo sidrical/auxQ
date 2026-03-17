@@ -193,32 +193,31 @@ async function getDevices(accessToken) {
 
 
 // --- Play a specific track ---
-async function playTrack(accessToken, spotifyUri) {
+async function playTrack(accessToken, spotifyUri, storedDeviceId = null) {
   const devices = await getDevices(accessToken);
   const activeDevice = devices.find(d => d.is_active);
   const fallbackDevice = devices[0];
+  
+  // Use stored device ID if no devices are currently visible
+  const deviceId = activeDevice?.id || fallbackDevice?.id || storedDeviceId;
 
-  if (!activeDevice && !fallbackDevice) {
+  if (!deviceId) {
     throw new Error('No Spotify device found. Open Spotify on any device first.');
   }
 
-  // If no active device, transfer playback to wake it up first
-  if (!activeDevice && fallbackDevice) {
+  if (!activeDevice && (fallbackDevice || storedDeviceId)) {
     await fetch(`${SPOTIFY_API}/me/player`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ device_ids: [fallbackDevice.id], play: false })
+      body: JSON.stringify({ device_ids: [deviceId], play: false })
     });
-    // Give Spotify a moment to register the transfer
     await new Promise(r => setTimeout(r, 600));
   }
 
-  const device = activeDevice || fallbackDevice;
-
-  const response = await fetch(`${SPOTIFY_API}/me/player/play?device_id=${device.id}`, {
+  const response = await fetch(`${SPOTIFY_API}/me/player/play?device_id=${deviceId}`, {
     method: 'PUT',
     headers: {
       'Authorization': `Bearer ${accessToken}`,

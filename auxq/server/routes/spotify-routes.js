@@ -60,9 +60,21 @@ router.get('/callback', async (req, res) => {
     hostTokens[roomCode] = {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      // Calculate when this token expires so we know when to refresh
-      expiresAt: Date.now() + (tokens.expiresIn * 1000)
+      expiresAt: Date.now() + (tokens.expiresIn * 1000),
+      deviceId: null
     };
+
+    // Try to capture the device ID right away while Spotify is active
+    try {
+      const devices = await spotify.getDevices(tokens.accessToken);
+      const device = devices.find(d => d.is_active) || devices[0];
+      if (device) {
+        hostTokens[roomCode].deviceId = device.id;
+        console.log(`[Spotify] Captured device ID for room ${roomCode}: ${device.name}`);
+      }
+    } catch (err) {
+      console.log('[Spotify] Could not capture device ID at login:', err.message);
+    }
 
     // Redirect the host back to their room in the app
     res.redirect(`${clientUrl}/room/${roomCode}?spotify=connected`);
@@ -176,16 +188,9 @@ router.post('/play', async (req, res) => {
 
     // Step 4: Now play
     if (spotifyUri) {
-      await spotify.playTrack(token, spotifyUri);
+      await spotify.playTrack(token, spotifyUri, hostTokens[roomCode]?.deviceId);
     } else {
-      const response = await fetch('https://api.spotify.com/v1/me/player/play', {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.status !== 204 && !response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error?.message || 'Playback error');
-      }
+      // resume...
     }
 
     res.json({ success: true });
