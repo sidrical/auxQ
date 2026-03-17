@@ -240,6 +240,7 @@ async function playTrack(accessToken, spotifyUri) {
 // --- Pause playback ---
 async function pausePlayback(accessToken) {
   const devices = await getDevices(accessToken);
+  console.log('Play response:', response.status, text);
   const device = devices.find(d => d.is_active) || devices[0];
 
   const url = device
