@@ -202,7 +202,7 @@ async function playTrack(accessToken, spotifyUri, storedDeviceId = null) {
   const deviceId = activeDevice?.id || fallbackDevice?.id || storedDeviceId;
 
   if (!deviceId) {
-    throw new Error('No Spotify device found. Open Spotify on any device first.');
+    throw new Error('Spotify is sleeping. Switch to Spotify, play anything briefly, then come back.');
   }
 
   if (!activeDevice && (fallbackDevice || storedDeviceId)) {
@@ -232,7 +232,11 @@ async function playTrack(accessToken, spotifyUri, storedDeviceId = null) {
   if (!text || text.trim() === '') return { success: true };
 
   const data = JSON.parse(text);
-  throw new Error(`Playback error: ${data.error?.message || 'Unknown error'}`);
+  const msg = data.error?.message || 'Unknown error';
+  if (msg.toLowerCase().includes('bad gateway') || msg.toLowerCase().includes('not found')) {
+    throw new Error('Spotify is sleeping. Switch to Spotify, play anything briefly, then come back.');
+  }
+  throw new Error(`Playback error: ${msg}`);
 }
 
 // --- Pause playback ---
