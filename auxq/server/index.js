@@ -267,8 +267,6 @@ socket.on('add-song', async ({ code, song }) => {
     return;
   }
 
-  console.log('add-song received:', JSON.stringify(song, null, 2));
-
   // If the song isn't from Spotify, find its Spotify equivalent
   let resolvedSong = song;
   if (song.source !== 'spotify') {
