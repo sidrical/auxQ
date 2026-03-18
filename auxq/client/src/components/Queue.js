@@ -31,7 +31,7 @@ function Queue({ queue, onAddClick }) {
           It takes each item in the array and returns JSX for it.
           The "key" prop is required — React uses it to efficiently track
           which items changed when the list updates. Use a unique ID, not the index. */}
-      {queue.slice(1).map((song, index) => (
+      {queue.map((song, index) => (
         <div className="queue-item" key={song.id}>
           <div className="queue-number">{index + 1}</div>
           <div className="song-artwork">
