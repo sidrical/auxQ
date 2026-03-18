@@ -261,16 +261,40 @@ io.on('connection', (socket) => {
   });
 
   // User adds a song to the queue
-socket.on('add-song', ({ code, song }) => {
+socket.on('add-song', async ({ code, song }) => {
   const room = rooms[code];
   if (!room) {
     socket.emit('error', { message: 'Room not found' });
     return;
   }
 
+  console.log('add-song received:', JSON.stringify(song, null, 2));
+
+  // If the song isn't from Spotify, find its Spotify equivalent
+  let resolvedSong = song;
+  if (song.source !== 'spotify') {
+    try {
+      const { findMatch } = require('./utils/song-matcher');
+      const token = await getValidToken(code);
+      const matched = await findMatch(song, 'spotify', token);
+      if (matched && matched.spotifyUri) {
+        resolvedSong = matched;
+        console.log(`Matched "${song.title}" to Spotify via ${matched.matchedVia}`);
+      } else {
+        console.warn(`Could not match "${song.title}" to Spotify`);
+        socket.emit('error', { message: `"${song.title}" couldn't be found on Spotify` });
+        return;
+      }
+    } catch (err) {
+      console.error('Song matching error:', err.message);
+      socket.emit('error', { message: 'Failed to match song across platforms' });
+      return;
+    }
+  }
+
   room.queue.push({
     id: Date.now().toString(),
-    ...song,
+    ...resolvedSong,
     addedBy: song.addedBy || 'Anonymous',
     addedAt: new Date()
   });
