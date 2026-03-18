@@ -285,6 +285,7 @@ const handleBack = useCallback(async () => {
           <Search
             roomCode={code}
             onAddSong={handleAddSong}
+            onTabChange={setActiveTab}
           />
         )}
         {activeTab === 'paste' && (

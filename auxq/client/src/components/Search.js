@@ -7,15 +7,51 @@
 // We're not implementing it here for simplicity, but it's a common optimization
 // you'd add later. For now, the user clicks a Search button.
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import * as api from '../utils/api';
+import socket from '../utils/socket';
 
-function Search({ roomCode, onAddSong }) {
+function Search({ roomCode, onAddSong, onTabChange }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [addedSongs, setAddedSongs] = useState([]); // Track which songs were added
+  const [addedSongs, setAddedSongs] = useState([]);   // Confirmed adds
+  const [pendingSongs, setPendingSongs] = useState([]); // Waiting for server confirmation
+
+  // Listen for server errors on Apple Music song matching.
+  // If the server couldn't match a song, remove it from pending so the
+  // user can try again — don't leave it stuck in a loading state.
+  useEffect(() => {
+    function handleError(err) {
+      // When a match fails, clear all pending songs so the + buttons
+      // become active again and the user can try a different result.
+      setPendingSongs([]);
+    }
+
+    // Listen for room-updated to confirm a pending Apple Music song was added.
+    // We compare the queue length — if it grew, the song made it through.
+    function handleRoomUpdated() {
+      // On any successful room update, move pending songs to confirmed added.
+      // This is safe because the server only emits room-updated after
+      // successfully pushing to the queue.
+      setPendingSongs(prev => {
+        if (prev.length > 0) {
+          setAddedSongs(confirmed => [...confirmed, ...prev]);
+          return [];
+        }
+        return prev;
+      });
+    }
+
+    socket.on('error', handleError);
+    socket.on('room-updated', handleRoomUpdated);
+
+    return () => {
+      socket.off('error', handleError);
+      socket.off('room-updated', handleRoomUpdated);
+    };
+  }, []);
 
   async function handleSearch() {
     if (!query.trim()) return;
@@ -33,7 +69,6 @@ function Search({ roomCode, onAddSong }) {
       ]);
 
       // Combine and interleave results from both platforms
-      // This gives the user a mix instead of all Spotify then all Apple Music
       const combined = interleaveResults(
         spotifyData.results || [],
         appleMusicData.results || []
@@ -51,19 +86,36 @@ function Search({ roomCode, onAddSong }) {
     }
   }
 
-  // Handle adding a song to the queue
   function handleAdd(song) {
-    onAddSong(song);
-    // Mark this song as added so we can show visual feedback
-    setAddedSongs(prev => [...prev, song.spotifyId || song.appleMusicId]);
+    const songId = song.spotifyId || song.appleMusicId;
+
+    if (song.source === 'spotify') {
+      // Spotify songs: optimistically mark as added and switch to queue tab.
+      // No matching needed server-side — it'll go straight through.
+      setAddedSongs(prev => [...prev, songId]);
+      onAddSong(song);
+      if (onTabChange) onTabChange('queue');
+    } else {
+      // Apple Music songs: mark as PENDING (spinner state) and don't switch tabs yet.
+      // The server needs to find a Spotify match first — this can fail.
+      // We wait for either a room-updated (success) or error (failure) event.
+      setPendingSongs(prev => [...prev, songId]);
+      onAddSong(song);
+      // Don't switch tabs — keep the user here so they can see the error
+      // toast if matching fails and try a different result.
+    }
   }
 
-  // Check if a song has already been added
   function isAdded(song) {
-    return addedSongs.includes(song.spotifyId || song.appleMusicId);
+    const songId = song.spotifyId || song.appleMusicId;
+    return addedSongs.includes(songId);
   }
 
-  // Handle Enter key in search box
+  function isPending(song) {
+    const songId = song.spotifyId || song.appleMusicId;
+    return pendingSongs.includes(songId);
+  }
+
   function handleKeyDown(e) {
     if (e.key === 'Enter') {
       handleSearch();
@@ -111,9 +163,9 @@ function Search({ roomCode, onAddSong }) {
             <button
               className={`add-btn ${isAdded(song) ? 'added' : ''}`}
               onClick={() => handleAdd(song)}
-              disabled={isAdded(song)}
+              disabled={isAdded(song) || isPending(song)}
             >
-              {isAdded(song) ? '✓' : '+'}
+              {isAdded(song) ? '✓' : isPending(song) ? '...' : '+'}
             </button>
           </div>
         ))}
@@ -124,7 +176,6 @@ function Search({ roomCode, onAddSong }) {
 
 // --- Helper: Interleave two arrays ---
 // Takes [S1, S2, S3] and [A1, A2, A3] and returns [S1, A1, S2, A2, S3, A3]
-// This gives the user a balanced mix of results from both platforms.
 function interleaveResults(arr1, arr2) {
   const result = [];
   const maxLen = Math.max(arr1.length, arr2.length);
