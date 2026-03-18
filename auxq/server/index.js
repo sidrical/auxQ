@@ -136,9 +136,8 @@ async function advanceQueue(roomCode) {
   const room = rooms[roomCode];
   if (!room) return;
 
-  // Remove the song that just finished
-  room.queue.shift();
-  room.currentTrack = room.queue[0] || null;
+  // The finished song is currentTrack — replace it with the front of the queue
+  room.currentTrack = room.queue.shift() || null;  // shift() removes AND returns queue[0]
   room._pollStartedAt = Date.now();
 
   if (room.currentTrack) {
@@ -299,9 +298,12 @@ socket.on('add-song', async ({ code, song }) => {
     addedAt: new Date()
   });
 
+  // ADD THIS:
+  console.log(`Queue state after push:`, JSON.stringify(room.queue.map(s => s.title)));
+  console.log(`Current track:`, room.currentTrack?.title);
+
   if (!room.currentTrack) {
-    room.currentTrack = room.queue[0];
-    room.queue.shift();
+    room.currentTrack = room.queue.shift();
   }
 
   io.to(code).emit('room-updated', room);
