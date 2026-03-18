@@ -25,123 +25,145 @@ const io = new Server(server, {
 });
 
 // --- Middleware ---
-// Middleware is code that runs on EVERY request before it reaches your routes.
-// Think of it like a security checkpoint at an airport — every passenger goes through it.
-
-// cors() lets your frontend (running on one URL) talk to your backend (running on another URL).
-// Without this, browsers block the request for security reasons. This is called "Cross-Origin Resource Sharing."
 app.use(cors());
-
-// express.json() tells Express to automatically parse JSON data sent in requests.
-// Without this, when your frontend sends { "song": "God's Plan" }, your backend wouldn't understand it.
 app.use(express.json());
 
 // --- In-Memory Room Storage ---
-// For our MVP, we'll store rooms in memory (a JavaScript object).
-// This means rooms disappear when the server restarts, which is fine for now.
-// Later, we'll move this to MongoDB for persistence.
 const rooms = {};
 
 // --- Auto-advance polling ---
-// Each room gets its own polling interval stored here.
-// Key = room code, Value = the interval timer ID (so we can cancel it later)
 const roomPollers = {};
 
 // How often we check Spotify (in milliseconds).
-// 3 seconds is frequent enough to feel instant, slow enough not to hammer the API.
 const POLL_INTERVAL_MS = 3000;
 
-// Start polling Spotify for a specific room.
-// Called when a song starts playing.
+// Per-room poller state — this is the key to reliable detection.
+// Instead of making decisions based on a single snapshot, we compare
+// the current Spotify state to what we saw last poll.
+const pollerState = {};
+// Shape of each entry:
+// {
+//   lastTrackId: string | null,       — Spotify track ID we saw last poll
+//   lastProgressMs: number,           — how far through the song we were last poll
+//   lastDurationMs: number,           — total length of the song last poll
+//   lastIsPlaying: boolean            — was Spotify playing last poll
+// }
+
 function startPolling(roomCode) {
-  // Don't start a second poller if one's already running for this room
   if (roomPollers[roomCode]) return;
 
   console.log(`[Poller] Starting for room ${roomCode}`);
 
+  // Initialize fresh state for this room
+  pollerState[roomCode] = {
+    lastTrackId: null,
+    lastProgressMs: 0,
+    lastDurationMs: 0,
+    lastIsPlaying: false
+  };
+
   roomPollers[roomCode] = setInterval(async () => {
     const room = rooms[roomCode];
 
-    // If the room no longer exists, clean up and stop
     if (!room) {
       stopPolling(roomCode);
       return;
     }
 
-    // If AuxQ thinks nothing is playing, nothing to check
     if (!room.currentTrack) return;
 
     try {
       const token = await getValidToken(roomCode);
       const state = await getPlaybackState(token);
 
-      // Spotify returned nothing — device is idle, do nothing
       if (!state || !state.currentTrack) return;
 
-      // --- Case 1: Song ended naturally ---
-      // Spotify reports not playing AND progress is near zero.
-      // "Near zero" = under 3 seconds. We use 3000ms as the threshold.
-      const songEndedNaturally = !state.isPlaying && state.currentTrack.progressMs < 3000 && room.isPlaying;
+      const prev = pollerState[roomCode];
+      const curr = {
+        trackId: state.currentTrack.spotifyId,
+        progressMs: state.currentTrack.progressMs,
+        durationMs: state.currentTrack.durationMs || 0,
+        isPlaying: state.isPlaying
+      };
 
-      // --- Case 2: Different song is playing in Spotify ---
-      // This catches the case where Spotify moved on but AuxQ didn't know
-      const inGracePeriod = Date.now() - (room._pollStartedAt || 0) < 5000;
-      const unexpectedTrack = !inGracePeriod && state.currentTrack.spotifyId !== room.currentTrack.spotifyId;
+      // --- Case 1: Song ended naturally ---
+      // The reliable signal is: progress was well into the song last poll (>60%),
+      // and now Spotify is either stopped or back near the beginning.
+      // This avoids false positives when a song is first loaded (progress starts at 0).
+      const wasWellIntoSong =
+        prev.lastDurationMs > 0 &&
+        prev.lastProgressMs / prev.lastDurationMs > 0.6;
+
+      const spotifyNowStopped =
+        !curr.isPlaying && curr.progressMs < 3000;
+
+      const songEndedNaturally = wasWellIntoSong && spotifyNowStopped && room.isPlaying;
+
+      // --- Case 2: Spotify is playing a different track than AuxQ expects ---
+      // This catches external skips or Spotify moving to its own next song.
+      // We only flag this if the track ID also doesn't match what AuxQ has queued.
+      const unexpectedTrack =
+        curr.isPlaying &&
+        curr.trackId !== room.currentTrack.spotifyId &&
+        prev.lastTrackId !== null; // ignore on the very first poll
 
       if (songEndedNaturally || unexpectedTrack) {
-        console.log(`[Poller] Song ended in room ${roomCode}, advancing queue`);
+        console.log(`[Poller] Advancing queue in room ${roomCode} (reason: ${songEndedNaturally ? 'natural end' : 'unexpected track'})`);
+        // Update state before advancing so the next poll starts fresh
+        pollerState[roomCode] = {
+          lastTrackId: curr.trackId,
+          lastProgressMs: curr.progressMs,
+          lastDurationMs: curr.durationMs,
+          lastIsPlaying: curr.isPlaying
+        };
         advanceQueue(roomCode);
         return;
       }
 
       // --- Case 3: User paused Spotify directly ---
-      // Spotify says not playing, but the song is mid-way through
-      // This means the user hit pause on their Spotify app
-      if (!state.isPlaying && room.isPlaying) {
+      if (!curr.isPlaying && prev.lastIsPlaying && room.isPlaying) {
         console.log(`[Poller] Playback paused externally in room ${roomCode}`);
         room.isPlaying = false;
         io.to(roomCode).emit('room-updated', room);
-        return;
       }
 
       // --- Case 4: User resumed Spotify directly ---
-      if (state.isPlaying && !room.isPlaying) {
+      if (curr.isPlaying && !prev.lastIsPlaying && !room.isPlaying) {
         console.log(`[Poller] Playback resumed externally in room ${roomCode}`);
         room.isPlaying = true;
         io.to(roomCode).emit('room-updated', room);
-        return;
       }
 
-      // --- Default: playing normally, do nothing ---
+      // Always update poller state for next iteration
+      pollerState[roomCode] = {
+        lastTrackId: curr.trackId,
+        lastProgressMs: curr.progressMs,
+        lastDurationMs: curr.durationMs,
+        lastIsPlaying: curr.isPlaying
+      };
 
     } catch (err) {
-      // Don't crash the poller on a single failed request — just log and continue
       console.error(`[Poller] Error in room ${roomCode}:`, err.message);
     }
   }, POLL_INTERVAL_MS);
 }
 
-// Stop polling for a room (when room is empty, destroyed, or nothing is playing)
 function stopPolling(roomCode) {
   if (roomPollers[roomCode]) {
     clearInterval(roomPollers[roomCode]);
     delete roomPollers[roomCode];
+    delete pollerState[roomCode];
     console.log(`[Poller] Stopped for room ${roomCode}`);
   }
 }
 
-// Advance the queue and play the next song.
-// This is extracted so both the skip button AND the poller can call it.
 async function advanceQueue(roomCode) {
   const room = rooms[roomCode];
   if (!room) return;
 
-  // The finished song is currentTrack — replace it with the front of the queue
-  room.currentTrack = room.queue.shift() || null;  // shift() removes AND returns queue[0]
-  room._pollStartedAt = Date.now();
+  room.currentTrack = room.queue.shift() || null;
 
   if (room.currentTrack) {
-    // There's a next song — play it
     room.isPlaying = true;
     io.to(roomCode).emit('room-updated', room);
 
@@ -155,7 +177,6 @@ async function advanceQueue(roomCode) {
       io.to(roomCode).emit('room-updated', room);
     }
   } else {
-    // Queue is empty
     room.isPlaying = false;
     stopPolling(roomCode);
     io.to(roomCode).emit('room-updated', room);
@@ -165,7 +186,6 @@ async function advanceQueue(roomCode) {
 
 // --- Helper: Generate a 4-digit room code ---
 function generateRoomCode() {
-  // Keep generating until we find a code that's not already in use
   let code;
   do {
     code = Math.floor(1000 + Math.random() * 9000).toString();
@@ -174,27 +194,19 @@ function generateRoomCode() {
 }
 
 // --- Import route files ---
-// As your app grows, you don't want ALL your endpoints in one file.
-// Instead, you organize them into separate "route" files and plug them in here.
 const spotifyRoutes = require('./routes/spotify-routes');
 const { getValidToken } = spotifyRoutes;
 const appleMusicRoutes = require('./routes/apple-music-routes');
 
-// This tells Express: "Any request starting with /api/spotify should be handled
-// by the spotify-routes file." So /api/spotify/search, /api/spotify/login, etc.
 app.use('/api/spotify', spotifyRoutes);
 app.use('/api/apple-music', appleMusicRoutes);
 
 // --- REST API Routes ---
-// REST stands for "Representational State Transfer" — it's just a standard way of
-// designing your API. Each URL (called an "endpoint") does one specific thing.
 
-// Health check — a simple endpoint to verify the server is running
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'AuxQ server is running' });
 });
 
-// Create a new room
 app.post('/api/rooms', (req, res) => {
   const { hostName } = req.body;
 
@@ -217,7 +229,6 @@ app.post('/api/rooms', (req, res) => {
   res.status(201).json({ room: rooms[code] });
 });
 
-// Get room info
 app.get('/api/rooms/:code', (req, res) => {
   const { code } = req.params;
   const room = rooms[code];
@@ -230,13 +241,10 @@ app.get('/api/rooms/:code', (req, res) => {
 });
 
 // --- Socket.io Real-Time Events ---
-// This is where the magic happens. When a user connects, we set up listeners
-// for different events they can trigger, like joining a room or adding a song.
 
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  // User joins a room
   socket.on('join-room', ({ code, userName }) => {
     const room = rooms[code];
     if (!room) {
@@ -244,107 +252,88 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // socket.join() is a Socket.io feature that puts this connection into a "group"
-    // so we can broadcast messages to everyone in the same room
     socket.join(code);
 
-    // Add user to the room's user list if they're not already there
     if (!room.users.includes(userName)) {
       room.users.push(userName);
       console.log(`${userName} joined room ${code}`);
     }
 
-    // Tell others someone joined, and send room data back to the joiner
     socket.to(code).emit('room-updated', room);
     socket.emit('room-updated', room);
   });
 
-  // User adds a song to the queue
-socket.on('add-song', async ({ code, song }) => {
-  const room = rooms[code];
-  if (!room) {
-    socket.emit('error', { message: 'Room not found' });
-    return;
-  }
-
-  // If the song isn't from Spotify, find its Spotify equivalent
-  let resolvedSong = song;
-  if (song.source !== 'spotify') {
-    try {
-      const { findMatch } = require('./utils/song-matcher');
-      const token = await getValidToken(code);
-      const matched = await findMatch(song, 'spotify', token);
-      if (matched && matched.spotifyUri) {
-        resolvedSong = matched;
-        console.log(`Matched "${song.title}" to Spotify via ${matched.matchedVia}`);
-      } else {
-        console.warn(`Could not match "${song.title}" to Spotify`);
-        socket.emit('error', { message: `"${song.title}" couldn't be found on Spotify` });
-        return;
-      }
-    } catch (err) {
-      console.error('Song matching error:', err.message);
-      socket.emit('error', { message: 'Failed to match song across platforms' });
+  socket.on('add-song', async ({ code, song }) => {
+    const room = rooms[code];
+    if (!room) {
+      socket.emit('error', { message: 'Room not found' });
       return;
     }
-  }
 
-  room.queue.push({
-    id: Date.now().toString(),
-    ...resolvedSong,
-    addedBy: song.addedBy || 'Anonymous',
-    addedAt: new Date()
+    let resolvedSong = song;
+    if (song.source !== 'spotify') {
+      try {
+        const { findMatch } = require('./utils/song-matcher');
+        const token = await getValidToken(code);
+        const matched = await findMatch(song, 'spotify', token);
+        if (matched && matched.spotifyUri) {
+          resolvedSong = matched;
+          console.log(`Matched "${song.title}" to Spotify via ${matched.matchedVia}`);
+        } else {
+          console.warn(`Could not match "${song.title}" to Spotify`);
+          socket.emit('error', { message: `"${song.title}" couldn't be found on Spotify` });
+          return;
+        }
+      } catch (err) {
+        console.error('Song matching error:', err.message);
+        socket.emit('error', { message: 'Failed to match song across platforms' });
+        return;
+      }
+    }
+
+    room.queue.push({
+      id: Date.now().toString(),
+      ...resolvedSong,
+      addedBy: song.addedBy || 'Anonymous',
+      addedAt: new Date()
+    });
+
+    if (!room.currentTrack) {
+      room.currentTrack = room.queue.shift();
+    }
+
+    io.to(code).emit('room-updated', room);
+    console.log(`Song added to room ${code}: ${song.title}`);
   });
 
-  // ADD THIS:
-  console.log(`Queue state after push:`, JSON.stringify(room.queue.map(s => s.title)));
-  console.log(`Current track:`, room.currentTrack?.title);
+  socket.on('next-song', ({ code }) => {
+    const room = rooms[code];
+    if (!room) return;
+    advanceQueue(code);
+  });
 
-  if (!room.currentTrack) {
-    room.currentTrack = room.queue.shift();
-  }
-
-  io.to(code).emit('room-updated', room);
-  console.log(`Song added to room ${code}: ${song.title}`);
-});
-
-  // Host skips to next song
-socket.on('next-song', ({ code }) => {
-  const room = rooms[code];
-  if (!room) return;
-
-  // Use advanceQueue so skip and auto-advance share the same logic
-  advanceQueue(code);
-});
-
-  // Host toggles play/pause
   socket.on('toggle-playback', ({ code }) => {
     const room = rooms[code];
     if (!room) return;
-
     room.isPlaying = !room.isPlaying;
     io.to(code).emit('room-updated', room);
   });
 
-  // Host started playing
-socket.on('play-started', ({ code }) => {
-  const room = rooms[code];
-  if (!room) return;
-  room.isPlaying = true;
-  room._pollStartedAt = Date.now();  // ← add this
-  io.to(code).emit('room-updated', room);
-  startPolling(code);
-});
+  socket.on('play-started', ({ code }) => {
+    const room = rooms[code];
+    if (!room) return;
+    room.isPlaying = true;
+    io.to(code).emit('room-updated', room);
+    startPolling(code);
+  });
 
-// Host paused
-socket.on('pause-started', ({ code }) => {
-  const room = rooms[code];
-  if (!room) return;
-  room.isPlaying = false;
-  io.to(code).emit('room-updated', room);
-});
+  socket.on('pause-started', ({ code }) => {
+    const room = rooms[code];
+    if (!room) return;
+    room.isPlaying = false;
+    io.to(code).emit('room-updated', room);
+  });
 
-  // User disconnects
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id}`);
   });
