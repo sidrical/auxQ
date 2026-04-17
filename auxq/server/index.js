@@ -369,3 +369,9 @@ io.on('connection', (socket) => {
     console.log(`User disconnected: ${socket.id}`);
   });
 });
+
+
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`AuxQ server running on port ${PORT}`);
+});
