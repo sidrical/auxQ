@@ -107,11 +107,6 @@ function RoomPage() {
     }
   }, [code, isHost]);
 
-  // --- Poll Spotify playback to auto-advance queue ---
-useEffect(() => {
-  // TEMPORARILY DISABLED
-}, [isHost, spotifyConnected, code]);
-
   // --- Song added handler ---
   // useCallback is a hook that "memoizes" a function — it remembers the function
   // between renders so it doesn't get recreated every time. This is important
@@ -325,3 +320,4 @@ const handleBack = useCallback(async () => {
 }
 
 export default RoomPage;
+                                                                                                                                            

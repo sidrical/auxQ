@@ -151,37 +151,6 @@ async function searchTracks(accessToken, query, limit = 10) {
 }
 
 
-// --- Add a track to the Spotify queue ---
-// This tells Spotify "play this song next on the host's device"
-async function addToQueue(accessToken, spotifyUri) {
-  const response = await fetch(
-    `${SPOTIFY_API}/me/player/queue?uri=${spotifyUri}`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`
-      }
-    }
-  );
-
-  console.log('Spotify queue response status:', response.status, await response.text());
-
-  if (response.status === 204) {
-    return { success: true };
-  }
-
-  const text = await response.text();
-  if (!text || text.trim() === '') return { success: true };
-
-  try {
-    const data = JSON.parse(text);
-    throw new Error(`Queue error: ${data.error?.message || 'Unknown error'}`);
-  } catch {
-    return { success: true };
-  }
-}
-
-
 // --- Get available devices ---
 async function getDevices(accessToken) {
   const response = await fetch(`${SPOTIFY_API}/me/player/devices`, {
@@ -389,12 +358,10 @@ async function getTrack(accessToken, trackId) {
 
 
 module.exports = {
-  // Original names (keep these — used internally)
   getAuthURL,
   getTokens,
   refreshAccessToken,
   searchTracks,
-  addToQueue,
   playTrack,
   resumePlayback,
   pausePlayback,
@@ -403,9 +370,4 @@ module.exports = {
   parseSpotifyLink,
   getTrack,
   getDevices,
-
-  // Aliases so spotify-routes.js works without changes
-  getAuthUrl: getAuthURL,
-  exchangeCodeForTokens: getTokens,
-  getCurrentlyPlaying: getPlaybackState,
-};
+};                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
