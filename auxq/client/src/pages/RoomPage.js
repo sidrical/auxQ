@@ -286,6 +286,7 @@ const handleBack = useCallback(async () => {
             roomCode={code}
             onAddSong={handleAddSong}
             onTabChange={setActiveTab}
+            hostPlatform={spotifyConnected ? 'spotify' : null}
           />
         )}
         {activeTab === 'paste' && (

@@ -11,7 +11,7 @@ import React, { useState, useEffect } from 'react';
 import * as api from '../utils/api';
 import socket from '../utils/socket';
 
-function Search({ roomCode, onAddSong, onTabChange }) {
+function Search({ roomCode, onAddSong, onTabChange, hostPlatform }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -60,19 +60,17 @@ function Search({ roomCode, onAddSong, onTabChange }) {
     setError('');
 
     try {
-      // Search both platforms simultaneously using Promise.all
-      // This fires both requests at the same time instead of waiting for one to finish
-      // before starting the other. Much faster.
-      const [spotifyData, appleMusicData] = await Promise.all([
-        api.searchSpotify(roomCode, query).catch(() => ({ results: [] })),
-        api.searchAppleMusic(query).catch(() => ({ results: [] }))
-      ]);
+      let combined = [];
 
-      // Combine and interleave results from both platforms
-      const combined = interleaveResults(
-        spotifyData.results || [],
-        appleMusicData.results || []
-      );
+      if (hostPlatform === 'spotify' || !hostPlatform) {
+        // Show Spotify results if host is on Spotify, or if no platform set yet
+        const spotifyData = await api.searchSpotify(roomCode, query).catch(() => ({ results: [] }));
+        combined = spotifyData.results || [];
+      } else if (hostPlatform === 'apple_music') {
+        // Future: Apple Music as host platform
+        const appleMusicData = await api.searchAppleMusic(query).catch(() => ({ results: [] }));
+        combined = appleMusicData.results || [];
+      }
 
       setResults(combined);
 
@@ -85,7 +83,6 @@ function Search({ roomCode, onAddSong, onTabChange }) {
       setLoading(false);
     }
   }
-
   function handleAdd(song) {
     const songId = song.spotifyId || song.appleMusicId;
 
