@@ -109,7 +109,7 @@ function startPolling(roomCode) {
         prev.lastTrackId !== null; // ignore on the very first poll
 
       if (songEndedNaturally || unexpectedTrack) {
-        const recentManualSkip = lastManualSkipAt[roomCode] && (Date.now() - lastManualSkipAt[roomCode] < 5000);
+        const recentManualSkip = lastManualSkipAt[roomCode] && (Date.now() - lastManualSkipAt[roomCode] < 8000);
         if (recentManualSkip) {
           console.log(`[Poller] Suppressing auto-advance — manual skip just occurred in room ${roomCode}`);
           return;
@@ -181,6 +181,8 @@ async function advanceQueue(roomCode) {
         lastIsPlaying: false
       };
     }
+
+    lastManualSkipAt[roomCode] = Date.now();
 
     try {
       const token = await getValidToken(roomCode);
