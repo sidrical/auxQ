@@ -60,11 +60,14 @@ function RoomPage() {
   // useEffect with an empty dependency array [] runs ONCE when the component mounts.
   // This is where we set up our WebSocket connection and join the room.
   useEffect(() => {
-  if (!socket.connected) {
-    socket.connect();
-  }
-
-  socket.emit('join-room', { code, userName });
+  // Re-join on every (re)connect. iOS Safari aggressively suspends WebSockets
+  // when the tab loses focus; socket.io auto-reconnects, but the new socket
+  // isn't in the room anymore, so server broadcasts wouldn't reach us until
+  // we re-emit join-room. Registering this on the 'connect' event covers the
+  // initial connect and every reconnect.
+  const joinRoom = () => {
+    socket.emit('join-room', { code, userName });
+  };
 
   const handleRoomUpdated = (updatedRoom) => {
     setRoom(updatedRoom);
@@ -76,10 +79,20 @@ function RoomPage() {
     setLoading(false);
   };
 
+  socket.on('connect', joinRoom);
   socket.on('room-updated', handleRoomUpdated);
   socket.on('error', handleError);
 
+  if (!socket.connected) {
+    socket.connect();
+  } else {
+    // Already connected (e.g., tab was still warm): join immediately since
+    // the 'connect' event won't fire again.
+    joinRoom();
+  }
+
   return () => {
+    socket.off('connect', joinRoom);
     socket.off('room-updated', handleRoomUpdated);
     socket.off('error', handleError);
   };
