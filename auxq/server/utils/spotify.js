@@ -239,6 +239,37 @@ async function playTrack(accessToken, spotifyUri, storedDeviceId = null) {
   throw new Error(`Playback error: ${msg}`);
 }
 
+// --- Resume playback ---
+// Spotify's play endpoint WITHOUT a `uris` body resumes from the last position.
+// (Passing `uris` would restart from 0 — that's playTrack's job.)
+async function resumePlayback(accessToken) {
+  const devices = await getDevices(accessToken);
+  const device = devices.find(d => d.is_active) || devices[0];
+
+  const url = device
+    ? `${SPOTIFY_API}/me/player/play?device_id=${device.id}`
+    : `${SPOTIFY_API}/me/player/play`;
+
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${accessToken}` }
+    // Intentionally no body — omitting `uris` tells Spotify to resume.
+  });
+
+  if (response.status === 204) return { success: true };
+
+  const text = await response.text();
+  if (!text || text.trim() === '') return { success: true };
+
+  try {
+    const data = JSON.parse(text);
+    throw new Error(`Resume error: ${data.error?.message || 'Unknown error'}`);
+  } catch {
+    return { success: true };
+  }
+}
+
+
 // --- Pause playback ---
 async function pausePlayback(accessToken) {
   const devices = await getDevices(accessToken);
@@ -365,6 +396,7 @@ module.exports = {
   searchTracks,
   addToQueue,
   playTrack,
+  resumePlayback,
   pausePlayback,
   skipToNext,
   getPlaybackState,

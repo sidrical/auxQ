@@ -118,7 +118,11 @@ useEffect(() => {
   // --- Playback controls (host only) ---
   const handlePlay = useCallback(async () => {
     try {
-      const uri = room?.currentTrack?.spotifyUri;
+      // Only send the URI on the FIRST play of a track. Sending it again
+      // would tell Spotify to restart from the beginning.
+      // If we've already started, omit the URI so the server resumes from
+      // the last playback position.
+      const uri = hasStarted ? undefined : room?.currentTrack?.spotifyUri;
       await api.playOnSpotify(code, uri);
       setRoom(prev => prev ? { ...prev, isPlaying: true } : prev);
       setHasStarted(true);
@@ -126,7 +130,7 @@ useEffect(() => {
     } catch (err) {
       setError(err.message);
     }
-  }, [code, room]);
+  }, [code, room, hasStarted]);
 
 const handlePause = useCallback(async () => {
   try {

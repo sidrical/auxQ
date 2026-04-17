@@ -187,10 +187,12 @@ router.post('/play', async (req, res) => {
     }
 
     // Step 4: Now play
+    // If a URI is provided, start that track from the beginning.
+    // If no URI is provided, resume the currently loaded track from its last position.
     if (spotifyUri) {
       await spotify.playTrack(token, spotifyUri, hostTokens[roomCode]?.deviceId);
     } else {
-      // resume...
+      await spotify.resumePlayback(token);
     }
 
     res.json({ success: true });
