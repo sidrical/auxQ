@@ -41,6 +41,7 @@ const POLL_INTERVAL_MS = 3000;
 // Instead of making decisions based on a single snapshot, we compare
 // the current Spotify state to what we saw last poll.
 const pollerState = {};
+const lastManualSkipAt = {};
 // Shape of each entry:
 // {
 //   lastTrackId: string | null,       — Spotify track ID we saw last poll
@@ -108,6 +109,12 @@ function startPolling(roomCode) {
         prev.lastTrackId !== null; // ignore on the very first poll
 
       if (songEndedNaturally || unexpectedTrack) {
+        const recentManualSkip = lastManualSkipAt[roomCode] && (Date.now() - lastManualSkipAt[roomCode] < 5000);
+        if (recentManualSkip) {
+          console.log(`[Poller] Suppressing auto-advance — manual skip just occurred in room ${roomCode}`);
+          return;
+        }
+        
         console.log(`[Poller] Advancing queue in room ${roomCode} (reason: ${songEndedNaturally ? 'natural end' : 'unexpected track'})`);
         // Update state before advancing so the next poll starts fresh
         pollerState[roomCode] = {
@@ -164,12 +171,22 @@ async function advanceQueue(roomCode) {
   room.currentTrack = room.queue.shift() || null;
 
   if (room.currentTrack) {
-    room.isPlaying = true;
-    io.to(roomCode).emit('room-updated', room);
+    // Reset poller state before playing so the next tick doesn't
+    // misread the transition and trigger a second advance.
+    if (pollerState[roomCode]) {
+      pollerState[roomCode] = {
+        lastTrackId: null,
+        lastProgressMs: 0,
+        lastDurationMs: 0,
+        lastIsPlaying: false
+      };
+    }
 
     try {
       const token = await getValidToken(roomCode);
       await playTrack(token, room.currentTrack.spotifyUri);
+      room.isPlaying = true;
+      io.to(roomCode).emit('room-updated', room);
       console.log(`[Poller] Now playing: ${room.currentTrack.title}`);
     } catch (err) {
       console.error(`[Poller] Failed to play next track:`, err.message);
@@ -309,6 +326,18 @@ io.on('connection', (socket) => {
   socket.on('next-song', ({ code }) => {
     const room = rooms[code];
     if (!room) return;
+
+    // Swallow rapid repeat skips within 1s. iOS Safari can fire two click
+    // events from a single tap under certain conditions, which would otherwise
+    // advance the queue twice.
+    const now = Date.now();
+    if (room.lastAdvanceAt && now - room.lastAdvanceAt < 1000) {
+      console.log(`[Skip] Ignoring rapid skip in room ${code}`);
+      return;
+    }
+    room.lastAdvanceAt = now;
+    lastManualSkipAt[code] = now;
+
     advanceQueue(code);
   });
 
@@ -337,10 +366,4 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id}`);
   });
-});
-
-// --- Start the server ---
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`AuxQ server running on port ${PORT}`);
 });
