@@ -1,0 +1,76 @@
+.setup-header {
+  padding-top: 60px;
+  margin-bottom: 40px;
+}
+
+.setup-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.setup-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.setup-subtitle {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.service-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  margin-bottom: 12px;
+  transition: opacity 0.2s, background 0.2s;
+  text-align: left;
+}
+
+.service-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.service-btn--spotify {
+  background: var(--color-spotify);
+  color: #fff;
+}
+
+.service-btn--spotify:not(:disabled):hover {
+  background: #17a349;
+}
+
+.service-btn--apple {
+  background: var(--color-apple);
+  color: #fff;
+}
+
+.service-btn__icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.service-btn__label {
+  flex: 1;
+}
+
+.service-btn__soon {
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.25);
+  padding: 2px 8px;
+  border-radius: 10px;
+}

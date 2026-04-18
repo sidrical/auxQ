@@ -1,63 +1,37 @@
-// HomePage.js — The first screen users see
-//
-// REACT HOOKS: You'll see useState and useNavigate here. "Hooks" are special
-// functions that give your components superpowers:
-//
-//   useState — lets your component remember things (like what the user typed).
-//     const [name, setName] = useState('');
-//     This creates a variable "name" (starts as empty string '')
-//     and a function "setName" to update it.
-//     When you call setName('Michael'), React re-renders the component with the new value.
-//
-//   useNavigate — lets you programmatically change the URL (go to a different page)
-//     navigate('/room/4821') sends the user to the room page.
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createRoom, getRoom } from '../utils/api';
+import Logo from '../components/Logo';
 import '../styles/home.css';
 
 function HomePage() {
-  // --- State ---
-  // Each piece of state is something that can change and needs to trigger a re-render.
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
-  const [mode, setMode] = useState('home'); // 'home', 'create', or 'join'
+  const [mode, setMode] = useState('home');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Hook to navigate between pages
   const navigate = useNavigate();
 
-  // --- Create a room ---
-  // "async" because we're making a network request to the server
   async function handleCreateRoom() {
     if (!name.trim()) {
       setError('Enter your name to continue');
       return;
     }
-
     setLoading(true);
     setError('');
-
     try {
-      // Call our API — this sends a POST request to /api/rooms
       const data = await createRoom(name.trim());
-
-      // Navigate to the room page with state
-      // The second argument passes data to the next page without putting it in the URL
-      navigate(`/room/${data.room.code}`, {
+      navigate(`/room/${data.room.code}/setup`, {
         state: { userName: name.trim(), isHost: true }
       });
     } catch (err) {
       setError(err.message);
     } finally {
-      // "finally" runs whether the try succeeded OR failed — good for cleanup
       setLoading(false);
     }
   }
 
-  // --- Join a room ---
   async function handleJoinRoom() {
     if (!name.trim()) {
       setError('Enter your name to continue');
@@ -67,14 +41,10 @@ function HomePage() {
       setError('Enter a valid 4-digit room code');
       return;
     }
-
     setLoading(true);
     setError('');
-
     try {
-      // Check if the room exists first
       await getRoom(roomCode.trim());
-
       navigate(`/room/${roomCode.trim()}`, {
         state: { userName: name.trim(), isHost: false }
       });
@@ -85,26 +55,14 @@ function HomePage() {
     }
   }
 
-  // --- Render ---
-  // JSX looks like HTML but it's actually JavaScript.
-  // Key differences:
-  //   - "class" becomes "className" (class is a reserved word in JS)
-  //   - Style uses objects: style={{ color: 'red' }} not style="color: red"
-  //   - Event handlers use camelCase: onClick not onclick
-  //   - Curly braces {} let you embed JavaScript expressions
-
   return (
-    <div className="home-page">
+    <div className="page-shell">
       <div className="home-header">
-        <h1 className="logo">aux<span>Q</span></h1>
+        <Logo />
         <p className="tagline">the cross-platform music queue</p>
       </div>
 
       <div className="home-content">
-        {/* This is a JSX comment. The && below is a common React pattern:
-            if the left side is true, render the right side. If false, render nothing.
-            It's a shorthand for: if (mode === 'home') { show this } */}
-
         {mode === 'home' && (
           <div className="home-form">
             <label className="label">Your name</label>
@@ -113,9 +71,6 @@ function HomePage() {
               placeholder="Enter your name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              // onChange fires every time the user types a character.
-              // e.target.value is what's currently in the input field.
-              // We update our state so React keeps the input in sync.
             />
 
             {error && <p className="error-text">{error}</p>}
@@ -123,10 +78,7 @@ function HomePage() {
             <button
               className="btn-primary"
               onClick={() => {
-                if (!name.trim()) {
-                  setError('Enter your name to continue');
-                  return;
-                }
+                if (!name.trim()) { setError('Enter your name to continue'); return; }
                 setError('');
                 handleCreateRoom();
               }}
@@ -139,10 +91,7 @@ function HomePage() {
             <button
               className="btn-secondary"
               onClick={() => {
-                if (!name.trim()) {
-                  setError('Enter your name to continue');
-                  return;
-                }
+                if (!name.trim()) { setError('Enter your name to continue'); return; }
                 setError('');
                 setMode('join');
               }}
@@ -166,11 +115,7 @@ function HomePage() {
               className="input-field room-code-input"
               placeholder="0000"
               value={roomCode}
-              onChange={(e) => {
-                // Only allow numbers, max 4 digits
-                const val = e.target.value.replace(/\D/g, '').slice(0, 4);
-                setRoomCode(val);
-              }}
+              onChange={(e) => setRoomCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
               maxLength={4}
             />
 
@@ -185,7 +130,6 @@ function HomePage() {
             </button>
           </div>
         )}
-
       </div>
 
       <div className="home-footer">

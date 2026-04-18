@@ -1,23 +1,6 @@
-.home-page {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  padding: 0 24px;
-}
-
 .home-header {
   padding-top: 80px;
   margin-bottom: 48px;
-}
-
-.logo {
-  font-size: 42px;
-  font-weight: 700;
-  letter-spacing: -2px;
-}
-
-.logo span {
-  color: var(--color-primary);
 }
 
 .tagline {
@@ -41,21 +24,6 @@
   margin-bottom: 6px;
 }
 
-.back-btn {
-  background: none;
-  border: none;
-  color: var(--color-text-secondary);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 0;
-  margin-bottom: 24px;
-  text-align: left;
-}
-
-.back-btn:hover {
-  color: var(--color-text);
-}
-
 .form-title {
   font-size: 22px;
   font-weight: 600;
@@ -74,12 +42,6 @@
   letter-spacing: 10px;
   font-family: 'SF Mono', 'Fira Code', monospace;
   margin-bottom: 16px;
-}
-
-.error-text {
-  color: #E24B4A;
-  font-size: 13px;
-  margin: 8px 0;
 }
 
 .home-footer {
