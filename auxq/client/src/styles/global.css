@@ -172,6 +172,19 @@ body {
   color: var(--color-text);
 }
 
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.link-btn:hover {
+  color: var(--color-primary-dark);
+}
+
 /* Dark mode — swaps all CSS variables when data-theme="dark" is on <html> */
 [data-theme="dark"] {
   --color-bg: #1C1C1E;

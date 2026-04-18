@@ -11,35 +11,24 @@
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'http://localhost:3001';
 
-// --- Helper function for making requests ---
-// "async/await" is how JavaScript handles operations that take time (like network requests).
-// "async" marks a function as asynchronous — it returns a Promise.
-// "await" pauses execution until the Promise resolves (until the server responds).
-// Without await, the code would keep running before the server answered.
 async function request(endpoint, options = {}) {
   const url = `${SERVER_URL}${endpoint}`;
-
-  const config = {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    ...options,
-  };
-
-  // If there's a body (for POST/PUT requests), convert it to a JSON string
-  if (config.body && typeof config.body === 'object') {
-    config.body = JSON.stringify(config.body);
-  }
+  const config = { headers: { 'Content-Type': 'application/json' }, ...options };
+  if (config.body && typeof config.body === 'object') config.body = JSON.stringify(config.body);
 
   const response = await fetch(url, config);
-
-  // If the server returned an error status (400, 404, 500, etc.)
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || `Request failed: ${response.status}`);
   }
-
   return response.json();
+}
+
+// Like request() but attaches the stored JWT if present
+export async function requestWithAuth(endpoint, options = {}) {
+  const token = localStorage.getItem('auxq-jwt');
+  const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  return request(endpoint, { ...options, headers: { ...headers, ...(options.headers || {}) } });
 }
 
 
@@ -60,7 +49,14 @@ export async function getRoom(code) {
 // --- Spotify endpoints ---
 
 export async function getSpotifyLoginURL(roomCode) {
-  return request(`/api/spotify/login?roomCode=${roomCode}`);
+  return requestWithAuth(`/api/spotify/login?roomCode=${roomCode}`);
+}
+
+export async function restoreSpotifySession(roomCode) {
+  return requestWithAuth('/api/spotify/restore-session', {
+    method: 'POST',
+    body: { roomCode },
+  });
 }
 
 export async function getSpotifyStatus(roomCode) {

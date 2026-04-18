@@ -4,7 +4,12 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const mongoose = require('mongoose');
 const { getPlaybackState, playTrack } = require('./utils/spotify');
+
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('[MongoDB] Connected'))
+  .catch(err => console.error('[MongoDB] Connection error:', err.message));
 
 const app = express();
 const server = http.createServer(app);
@@ -161,9 +166,11 @@ function generateRoomCode() {
 const spotifyRoutes = require('./routes/spotify-routes');
 const { getValidToken } = spotifyRoutes;
 const appleMusicRoutes = require('./routes/apple-music-routes');
+const authRoutes = require('./routes/auth-routes');
 
 app.use('/api/spotify', spotifyRoutes);
 app.use('/api/apple-music', appleMusicRoutes);
+app.use('/auth', authRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 

@@ -7,6 +7,9 @@
 const express = require('express');
 const router = express.Router();
 const spotify = require('../utils/spotify');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const { optionalToken, verifyToken } = require('../middleware/auth');
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
 
 // We'll store host tokens in memory for now, keyed by room code.
@@ -16,47 +19,31 @@ const hostTokens = {};
 
 
 // --- Login: Redirect host to Spotify's login page ---
-// The frontend calls this when the host clicks "Login with Spotify"
-router.get('/login', (req, res) => {
-  // req.query is how you read URL parameters
-  // Example: /api/spotify/login?roomCode=4821 → req.query.roomCode is "4821"
+router.get('/login', optionalToken, (req, res) => {
   const { roomCode } = req.query;
+  if (!roomCode) return res.status(400).json({ error: 'Room code is required' });
 
-  if (!roomCode) {
-    return res.status(400).json({ error: 'Room code is required' });
-  }
-
-  // Get the Spotify authorization URL and send it back to the frontend
-  // The frontend will redirect the user's browser to this URL
   const authURL = spotify.getAuthURL();
 
-  // We append our room code to Spotify's "state" parameter.
-  // "state" is a value that Spotify sends back to us unchanged after login.
-  // We use it to remember which room this login is for.
-  res.json({ url: `${authURL}&state=${roomCode}` });
+  // Encode state as "roomCode|userId" when the user is logged in, otherwise just "roomCode"
+  const state = req.user ? `${roomCode}|${req.user.id}` : roomCode;
+  res.json({ url: `${authURL}&state=${encodeURIComponent(state)}` });
 });
 
 
 // --- Callback: Spotify redirects here after the user logs in ---
-// This is the REDIRECT_URI we registered on Spotify's dashboard.
-// Spotify adds ?code=xxx&state=roomCode to the URL when redirecting back.
 router.get('/callback', async (req, res) => {
-  const { code, state: roomCode, error } = req.query;
+  const { code, state: rawState, error } = req.query;
 
-  // If the user denied permission
-  if (error) {
-    return res.redirect(`${clientUrl}/?error=spotify_denied`);
-}
+  if (error) return res.redirect(`${clientUrl}/?error=spotify_denied`);
+  if (!code || !rawState) return res.redirect(`${clientUrl}/?error=missing_params`);
 
-  if (!code || !roomCode) {
-    return res.redirect(`${clientUrl}/?error=missing_params`);
-}
+  // State is either "roomCode" (guest) or "roomCode|userId" (logged-in user)
+  const [roomCode, userId] = rawState.split('|');
 
   try {
-    // Exchange the authorization code for access + refresh tokens
     const tokens = await spotify.getTokens(code);
 
-    // Store the tokens for this room's host
     hostTokens[roomCode] = {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
@@ -64,7 +51,6 @@ router.get('/callback', async (req, res) => {
       deviceId: null
     };
 
-    // Try to capture the device ID right away while Spotify is active
     try {
       const devices = await spotify.getDevices(tokens.accessToken);
       const device = devices.find(d => d.is_active) || devices[0];
@@ -76,7 +62,22 @@ router.get('/callback', async (req, res) => {
       console.log('[Spotify] Could not capture device ID at login:', err.message);
     }
 
-    // Redirect the host back to their room in the app
+    // Persist tokens to the user's account if they were logged in
+    if (userId) {
+      try {
+        await User.findByIdAndUpdate(userId, {
+          spotify: {
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+            expiresAt: Date.now() + (tokens.expiresIn * 1000)
+          }
+        });
+        console.log(`[Spotify] Saved tokens to account for user ${userId}`);
+      } catch (err) {
+        console.error('[Spotify] Could not save tokens to user account:', err.message);
+      }
+    }
+
     res.redirect(`${clientUrl}/room/${roomCode}?spotify=connected`);
   } catch (err) {
     console.error('Spotify callback error:', err);
@@ -229,6 +230,53 @@ router.get('/status', (req, res) => {
   const { roomCode } = req.query;
   const isConnected = !!hostTokens[roomCode];
   res.json({ connected: isConnected });
+});
+
+
+// --- Restore saved Spotify tokens for a new room session ---
+// Called when a logged-in user with saved tokens creates a room,
+// so they skip the OAuth flow entirely.
+router.post('/restore-session', verifyToken, async (req, res) => {
+  const { roomCode } = req.body;
+  if (!roomCode) return res.status(400).json({ error: 'Room code is required' });
+
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user?.spotify?.refreshToken) {
+      return res.status(404).json({ error: 'No Spotify account linked' });
+    }
+
+    let { accessToken, refreshToken, expiresAt } = user.spotify;
+
+    // Refresh the access token if it's expired or about to expire
+    if (Date.now() > expiresAt - 60000) {
+      const newTokens = await spotify.refreshAccessToken(refreshToken);
+      accessToken = newTokens.accessToken;
+      expiresAt = Date.now() + (newTokens.expiresIn * 1000);
+      await User.findByIdAndUpdate(req.user.id, {
+        'spotify.accessToken': accessToken,
+        'spotify.expiresAt': expiresAt
+      });
+    }
+
+    hostTokens[roomCode] = { accessToken, refreshToken, expiresAt, deviceId: null };
+
+    try {
+      const devices = await spotify.getDevices(accessToken);
+      const device = devices.find(d => d.is_active) || devices[0];
+      if (device) {
+        hostTokens[roomCode].deviceId = device.id;
+        console.log(`[Spotify] Restored session for room ${roomCode}: ${device.name}`);
+      }
+    } catch {
+      console.log(`[Spotify] Restored session for room ${roomCode} (no active device yet)`);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Restore session error:', err);
+    res.status(500).json({ error: 'Could not restore Spotify session' });
+  }
 });
 
 

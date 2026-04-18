@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getSpotifyLoginURL, getAppleMusicDeveloperToken } from '../utils/api';
-import { authorize as authorizeMusicKit } from '../utils/musickit';
+import { getSpotifyLoginURL, getAppleMusicDeveloperToken, restoreSpotifySession } from '../utils/api';
+import { authorize as authorizeMusicKit, configureMusicKit } from '../utils/musickit';
+import { isLoggedIn, getUser, connectAppleMusic } from '../utils/auth';
 import useRoomSession from '../utils/useRoomSession';
 import Logo from '../components/Logo';
 import '../styles/setup.css';
@@ -13,7 +14,45 @@ function SetupPage() {
 
   const [connectingSpotify, setConnectingSpotify] = useState(false);
   const [connectingApple, setConnectingApple] = useState(false);
+  const [autoConnecting, setAutoConnecting] = useState(null); // 'spotify' | 'apple' | null
   const [error, setError] = useState('');
+
+  // Auto-connect if the logged-in user already has a music service linked
+  useEffect(() => {
+    if (!isLoggedIn()) return;
+    const user = getUser();
+
+    async function tryAutoConnect() {
+      // Try Spotify first
+      if (user?.spotify?.refreshToken) {
+        setAutoConnecting('spotify');
+        try {
+          await restoreSpotifySession(code);
+          navigate(`/room/${code}`, { state: { userName, isHost: true } });
+          return;
+        } catch {
+          setAutoConnecting(null);
+        }
+      }
+
+      // Try Apple Music — MusicKit stores auth in the browser across sessions
+      if (user?.appleMusicToken) {
+        setAutoConnecting('apple');
+        try {
+          const { token: devToken } = await getAppleMusicDeveloperToken();
+          const music = await configureMusicKit(devToken);
+          if (music.isAuthorized) {
+            sessionStorage.setItem(`auxq-platform-${code}`, 'apple_music');
+            navigate(`/room/${code}`, { state: { userName, isHost: true, hostPlatform: 'apple_music' } });
+            return;
+          }
+        } catch {}
+        setAutoConnecting(null);
+      }
+    }
+
+    tryAutoConnect();
+  }, []);
 
   const busy = connectingSpotify || connectingApple;
 
@@ -34,8 +73,13 @@ function SetupPage() {
     setError('');
     try {
       const { token: developerToken } = await getAppleMusicDeveloperToken();
-      await authorizeMusicKit(developerToken);
+      const userToken = await authorizeMusicKit(developerToken);
       sessionStorage.setItem(`auxq-platform-${code}`, 'apple_music');
+
+      if (isLoggedIn() && userToken) {
+        connectAppleMusic(userToken).catch(() => {}); // save to account in background
+      }
+
       navigate(`/room/${code}`, {
         state: { userName, isHost: true, hostPlatform: 'apple_music' }
       });
@@ -43,6 +87,21 @@ function SetupPage() {
       setError('Could not connect to Apple Music. Try again.');
       setConnectingApple(false);
     }
+  }
+
+  if (autoConnecting) {
+    return (
+      <div className="page-shell">
+        <div className="setup-header">
+          <Logo />
+        </div>
+        <div className="setup-content">
+          <p className="setup-subtitle">
+            {autoConnecting === 'spotify' ? 'Restoring your Spotify connection...' : 'Restoring your Apple Music connection...'}
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (

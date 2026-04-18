@@ -16,6 +16,7 @@ import HomePage from './pages/HomePage';
 import RoomPage from './pages/RoomPage';
 import SetupPage from './pages/SetupPage';
 import SpotifyCallback from './pages/SpotifyCallback';
+import AccountPage from './pages/AccountPage';
 import useDarkMode from './utils/useDarkMode';
 import './styles/global.css';
 
@@ -26,6 +27,7 @@ function App() {
       <div className="app-container">
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/account" element={<AccountPage />} />
           <Route path="/room/:code/setup" element={<SetupPage />} />
           <Route path="/room/:code" element={<RoomPage theme={theme} toggleTheme={toggle} />} />
           <Route path="/callback" element={<SpotifyCallback />} />

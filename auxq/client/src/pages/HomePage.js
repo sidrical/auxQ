@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createRoom, getRoom } from '../utils/api';
+import { getUser, isLoggedIn, clearSession } from '../utils/auth';
 import Logo from '../components/Logo';
 import '../styles/home.css';
 
 function HomePage() {
-  const [name, setName] = useState('');
+  const loggedInUser = isLoggedIn() ? getUser() : null;
+  const [name, setName] = useState(loggedInUser?.username || '');
   const [roomCode, setRoomCode] = useState('');
   const [mode, setMode] = useState('home');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+
 
   async function handleCreateRoom() {
     if (!name.trim()) {
@@ -134,6 +137,34 @@ function HomePage() {
 
       <div className="home-footer">
         <p>Spotify + Apple Music users can queue together</p>
+        {loggedInUser ? (
+          <p style={{ marginTop: 8, fontSize: 13 }}>
+            Signed in as <strong>{loggedInUser.username}</strong>
+            {' · '}
+            <button
+              className="link-btn"
+              onClick={() => navigate('/account')}
+              style={{ fontSize: 13 }}
+            >
+              Account
+            </button>
+            {' · '}
+            <button
+              className="link-btn"
+              onClick={() => { clearSession(); setName(''); }}
+              style={{ fontSize: 13 }}
+            >
+              Log out
+            </button>
+          </p>
+        ) : (
+          <p style={{ marginTop: 8, fontSize: 13 }}>
+            <button className="link-btn" onClick={() => navigate('/account')} style={{ fontSize: 13 }}>
+              Sign in
+            </button>
+            {' to save your music connections'}
+          </p>
+        )}
       </div>
     </div>
   );

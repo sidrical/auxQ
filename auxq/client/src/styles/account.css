@@ -1,0 +1,155 @@
+.account-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px 48px;
+}
+
+.account-header {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.account-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--card-bg, #1a1a1a);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.account-card + .account-card {
+  margin-top: 16px;
+}
+
+.account-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  background: var(--surface, #111);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.account-tab {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-secondary, #888);
+  transition: background 0.15s, color 0.15s;
+}
+
+.account-tab.active {
+  background: var(--accent, #1db954);
+  color: #fff;
+}
+
+.account-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.account-field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #888);
+}
+
+.account-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text, #fff);
+}
+
+.service-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border, #2a2a2a);
+}
+
+.service-row:last-child {
+  border-bottom: none;
+}
+
+.service-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.service-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text, #fff);
+}
+
+.service-status {
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+}
+
+.service-status.connected {
+  color: #1db954;
+}
+
+.btn-disconnect {
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #2a2a2a);
+  background: transparent;
+  color: var(--text-secondary, #888);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.btn-disconnect:hover {
+  border-color: #e53e3e;
+  color: #e53e3e;
+}
+
+.account-username {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text, #fff);
+  margin-bottom: 4px;
+}
+
+.account-meta {
+  font-size: 13px;
+  color: var(--text-secondary, #888);
+}
+
+.btn-logout {
+  width: 100%;
+  margin-top: 24px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #2a2a2a);
+  background: transparent;
+  color: #e53e3e;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-logout:hover {
+  background: rgba(229, 62, 62, 0.08);
+}
