@@ -121,7 +121,6 @@ function RoomPage({ theme, toggleTheme: toggle }) {
 
   // Reset Apple Music started flag and progress when the current track changes.
   // Initialize durationMs from the track object so the bar appears immediately.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     appleMusicStartedRef.current = false;
     const dur = room?.currentTrack?.durationMs || 0;
