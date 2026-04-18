@@ -14,7 +14,7 @@ import { useState, useEffect } from 'react';
 function useDarkMode() {
   // Read saved preference, default to 'light' if nothing saved yet
   const [theme, setTheme] = useState(
-    () => localStorage.getItem('auxq-theme') || 'light'
+    () => localStorage.getItem('auxq-theme') || 'dark'
   );
 
   // useEffect runs after render. Whenever "theme" changes, this updates

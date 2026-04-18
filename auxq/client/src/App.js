@@ -15,17 +15,17 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import RoomPage from './pages/RoomPage';
 import SpotifyCallback from './pages/SpotifyCallback';
+import useDarkMode from './utils/useDarkMode';
 import './styles/global.css';
 
-// This is a "functional component" — the most common way to write React components.
-// It's just a function that returns JSX (that HTML-looking stuff).
 function App() {
+  const { theme, toggle } = useDarkMode();
   return (
     <BrowserRouter>
       <div className="app-container">
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/room/:code" element={<RoomPage />} />
+          <Route path="/room/:code" element={<RoomPage theme={theme} toggleTheme={toggle} />} />
           <Route path="/callback" element={<SpotifyCallback />} />
         </Routes>
       </div>

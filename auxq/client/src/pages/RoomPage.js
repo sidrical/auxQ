@@ -26,9 +26,7 @@ import Search from '../components/Search';
 import PasteLink from '../components/PasteLink';
 import NowPlaying from '../components/NowPlaying';
 import '../styles/room.css';
-import useDarkMode from '../utils/useDarkMode';
-
-function RoomPage() {
+function RoomPage({ theme, toggleTheme: toggle }) {
   // --- Read URL params and navigation state ---
   const { code } = useParams();
   const location = useLocation();
@@ -54,7 +52,6 @@ function RoomPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [hasStarted, setHasStarted] = useState(false);
-  const { theme, toggle } = useDarkMode();
 
   // --- Connect to room on mount ---
   // useEffect with an empty dependency array [] runs ONCE when the component mounts.
