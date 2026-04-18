@@ -343,13 +343,6 @@ io.on('connection', (socket) => {
     advanceQueue(code);
   });
 
-  socket.on('toggle-playback', ({ code }) => {
-    const room = rooms[code];
-    if (!room) return;
-    room.isPlaying = !room.isPlaying;
-    io.to(code).emit('room-updated', room);
-  });
-
   socket.on('play-started', ({ code }) => {
     const room = rooms[code];
     if (!room) return;

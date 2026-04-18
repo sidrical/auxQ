@@ -11,7 +11,7 @@ import React, { useState, useEffect } from 'react';
 import * as api from '../utils/api';
 import socket from '../utils/socket';
 
-function Search({ roomCode, onAddSong, onTabChange, hostPlatform }) {
+function Search({ roomCode, onAddSong, onTabChange }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -62,15 +62,8 @@ function Search({ roomCode, onAddSong, onTabChange, hostPlatform }) {
     try {
       let combined = [];
 
-      if (hostPlatform === 'spotify' || !hostPlatform) {
-        // Show Spotify results if host is on Spotify, or if no platform set yet
-        const spotifyData = await api.searchSpotify(roomCode, query).catch(() => ({ results: [] }));
-        combined = spotifyData.results || [];
-      } else if (hostPlatform === 'apple_music') {
-        // Future: Apple Music as host platform
-        const appleMusicData = await api.searchAppleMusic(query).catch(() => ({ results: [] }));
-        combined = appleMusicData.results || [];
-      }
+      const spotifyData = await api.searchSpotify(roomCode, query).catch(() => ({ results: [] }));
+      combined = spotifyData.results || [];
 
       setResults(combined);
 

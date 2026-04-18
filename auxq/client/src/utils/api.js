@@ -78,13 +78,6 @@ export async function parseSpotifyLink(roomCode, url) {
   });
 }
 
-export async function queueOnSpotify(roomCode, spotifyUri) {
-  return request('/api/spotify/queue', {
-    method: 'POST',
-    body: { roomCode, spotifyUri },
-  });
-}
-
 export async function playOnSpotify(roomCode, spotifyUri) {
   return request('/api/spotify/play', {
     method: 'POST',
@@ -99,27 +92,7 @@ export async function pauseSpotify(roomCode) {
   });
 }
 
-export async function skipSpotify(roomCode, spotifyUri) {
-  return request('/api/spotify/skip', {
-    method: 'POST',
-    body: { roomCode, spotifyUri },
-  });
-}
-
-export async function getPlaybackState(roomCode) {
-  return request(`/api/spotify/playback?roomCode=${roomCode}`);
-}
-
-
 // --- Apple Music endpoints ---
-
-export async function getAppleMusicToken() {
-  return request('/api/apple-music/token');
-}
-
-export async function searchAppleMusic(query) {
-  return request(`/api/apple-music/search?q=${encodeURIComponent(query)}`);
-}
 
 export async function parseAppleMusicLink(url) {
   return request('/api/apple-music/parse-link', {

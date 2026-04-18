@@ -125,25 +125,6 @@ router.get('/search', async (req, res) => {
 });
 
 
-// --- Add to queue ---
-router.post('/queue', async (req, res) => {
-  const { roomCode, spotifyUri } = req.body;
-
-  if (!roomCode || !spotifyUri) {
-    return res.status(400).json({ error: 'Room code and Spotify URI are required' });
-  }
-
-  try {
-    const token = await getValidToken(roomCode);
-    await spotify.addToQueue(token, spotifyUri);
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Queue error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
 // --- Play ---
 router.post('/play', async (req, res) => {
   const { roomCode, spotifyUri } = req.body;
@@ -213,46 +194,6 @@ router.post('/pause', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('Pause error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-// --- Skip ---
-router.post('/skip', async (req, res) => {
-  const { roomCode, spotifyUri } = req.body;
-
-  try {
-    const token = await getValidToken(roomCode);
-    
-    if (spotifyUri) {
-      // Play the next song directly instead of using Spotify's skip
-      await spotify.playTrack(token, spotifyUri);
-    } else {
-      await spotify.skipToNext(token);
-    }
-    
-    res.json({ success: true });
-  } catch (err) {
-    if (err.message.includes('not valid JSON') || err.message.includes('unexpected')) {
-      return res.json({ success: true });
-    }
-    console.error('Skip error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-// --- Get playback state ---
-router.get('/playback', async (req, res) => {
-  const { roomCode } = req.query;
-
-  try {
-    const token = await getValidToken(roomCode);
-    const state = await spotify.getPlaybackState(token);
-    res.json({ state });
-  } catch (err) {
-    console.error('Playback state error:', err);
     res.status(500).json({ error: err.message });
   }
 });

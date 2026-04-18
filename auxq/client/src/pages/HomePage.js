@@ -186,26 +186,6 @@ function HomePage() {
           </div>
         )}
 
-        {mode === 'create' && (
-          <div className="home-form">
-            <button className="back-btn" onClick={() => setMode('home')}>
-              ← Back
-            </button>
-
-            <h2 className="form-title">Creating your room...</h2>
-            <p className="form-subtitle">You'll get a code to share with friends</p>
-
-            {error && <p className="error-text">{error}</p>}
-
-            <button
-              className="btn-primary"
-              onClick={handleCreateRoom}
-              disabled={loading}
-            >
-              {loading ? 'Creating...' : 'Create room'}
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="home-footer">
