@@ -94,6 +94,14 @@ export async function pauseSpotify(roomCode) {
 
 // --- Apple Music endpoints ---
 
+export async function getAppleMusicDeveloperToken() {
+  return request('/api/apple-music/token');
+}
+
+export async function searchAppleMusic(query, storefront = 'us') {
+  return request(`/api/apple-music/search?q=${encodeURIComponent(query)}&storefront=${storefront}`);
+}
+
 export async function parseAppleMusicLink(url) {
   return request('/api/apple-music/parse-link', {
     method: 'POST',

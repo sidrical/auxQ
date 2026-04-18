@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getSpotifyLoginURL } from '../utils/api';
+import { getSpotifyLoginURL, getAppleMusicDeveloperToken } from '../utils/api';
+import { authorize as authorizeMusicKit } from '../utils/musickit';
 import useRoomSession from '../utils/useRoomSession';
 import Logo from '../components/Logo';
 import '../styles/setup.css';
@@ -8,10 +9,13 @@ import '../styles/setup.css';
 function SetupPage() {
   const { code } = useParams();
   const navigate = useNavigate();
-  useRoomSession(code);
+  const { userName } = useRoomSession(code);
 
   const [connectingSpotify, setConnectingSpotify] = useState(false);
+  const [connectingApple, setConnectingApple] = useState(false);
   const [error, setError] = useState('');
+
+  const busy = connectingSpotify || connectingApple;
 
   async function handleConnectSpotify() {
     setConnectingSpotify(true);
@@ -22,6 +26,22 @@ function SetupPage() {
     } catch (err) {
       setError('Could not reach Spotify. Try again.');
       setConnectingSpotify(false);
+    }
+  }
+
+  async function handleConnectAppleMusic() {
+    setConnectingApple(true);
+    setError('');
+    try {
+      const { token: developerToken } = await getAppleMusicDeveloperToken();
+      await authorizeMusicKit(developerToken);
+      sessionStorage.setItem(`auxq-platform-${code}`, 'apple_music');
+      navigate(`/room/${code}`, {
+        state: { userName, isHost: true, hostPlatform: 'apple_music' }
+      });
+    } catch (err) {
+      setError('Could not connect to Apple Music. Try again.');
+      setConnectingApple(false);
     }
   }
 
@@ -43,7 +63,7 @@ function SetupPage() {
         <button
           className="service-btn service-btn--spotify"
           onClick={handleConnectSpotify}
-          disabled={connectingSpotify}
+          disabled={busy}
         >
           <span className="service-btn__icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -55,14 +75,19 @@ function SetupPage() {
           </span>
         </button>
 
-        <button className="service-btn service-btn--apple" disabled>
+        <button
+          className="service-btn service-btn--apple"
+          onClick={handleConnectAppleMusic}
+          disabled={busy}
+        >
           <span className="service-btn__icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
             </svg>
           </span>
-          <span className="service-btn__label">Apple Music</span>
-          <span className="service-btn__soon">Coming soon</span>
+          <span className="service-btn__label">
+            {connectingApple ? 'Connecting...' : 'Connect Apple Music'}
+          </span>
         </button>
       </div>
     </div>

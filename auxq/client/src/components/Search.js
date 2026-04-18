@@ -1,40 +1,21 @@
-// Search.js — Song search functionality
-//
-// NEW CONCEPT: "Debouncing"
-// When a user types in a search box, you don't want to fire an API request
-// on EVERY keystroke. If they type "Drake", that's 5 API calls (D, Dr, Dra, Drak, Drake).
-// Debouncing means "wait until the user STOPS typing for X milliseconds, then search."
-// We're not implementing it here for simplicity, but it's a common optimization
-// you'd add later. For now, the user clicks a Search button.
-
 import React, { useState, useEffect } from 'react';
 import * as api from '../utils/api';
 import socket from '../utils/socket';
 
-function Search({ roomCode, onAddSong, onTabChange }) {
+function Search({ roomCode, onAddSong, onTabChange, hostPlatform }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [addedSongs, setAddedSongs] = useState([]);   // Confirmed adds
-  const [pendingSongs, setPendingSongs] = useState([]); // Waiting for server confirmation
+  const [addedSongs, setAddedSongs] = useState([]);
+  const [pendingSongs, setPendingSongs] = useState([]);
 
-  // Listen for server errors on Apple Music song matching.
-  // If the server couldn't match a song, remove it from pending so the
-  // user can try again — don't leave it stuck in a loading state.
   useEffect(() => {
-    function handleError(err) {
-      // When a match fails, clear all pending songs so the + buttons
-      // become active again and the user can try a different result.
+    function handleError() {
       setPendingSongs([]);
     }
 
-    // Listen for room-updated to confirm a pending Apple Music song was added.
-    // We compare the queue length — if it grew, the song made it through.
     function handleRoomUpdated() {
-      // On any successful room update, move pending songs to confirmed added.
-      // This is safe because the server only emits room-updated after
-      // successfully pushing to the queue.
       setPendingSongs(prev => {
         if (prev.length > 0) {
           setAddedSongs(confirmed => [...confirmed, ...prev]);
@@ -55,61 +36,51 @@ function Search({ roomCode, onAddSong, onTabChange }) {
 
   async function handleSearch() {
     if (!query.trim()) return;
-
     setLoading(true);
     setError('');
-
     try {
-      let combined = [];
-
-      const spotifyData = await api.searchSpotify(roomCode, query).catch(() => ({ results: [] }));
-      combined = spotifyData.results || [];
-
-      setResults(combined);
-
-      if (combined.length === 0) {
-        setError('No results found');
+      let results = [];
+      if (hostPlatform === 'apple_music') {
+        const data = await api.searchAppleMusic(query);
+        results = data.results || [];
+      } else {
+        const data = await api.searchSpotify(roomCode, query).catch(() => ({ results: [] }));
+        results = data.results || [];
       }
+      setResults(results);
+      if (results.length === 0) setError('No results found');
     } catch (err) {
       setError('Search failed. Try again.');
     } finally {
       setLoading(false);
     }
   }
+
   function handleAdd(song) {
     const songId = song.spotifyId || song.appleMusicId;
+    const effectivePlatform = hostPlatform || 'spotify';
+    const needsMatching = song.source !== effectivePlatform;
 
-    if (song.source === 'spotify') {
-      // Spotify songs: optimistically mark as added and switch to queue tab.
-      // No matching needed server-side — it'll go straight through.
+    if (!needsMatching) {
       setAddedSongs(prev => [...prev, songId]);
       onAddSong(song);
       if (onTabChange) onTabChange('queue');
     } else {
-      // Apple Music songs: mark as PENDING (spinner state) and don't switch tabs yet.
-      // The server needs to find a Spotify match first — this can fail.
-      // We wait for either a room-updated (success) or error (failure) event.
       setPendingSongs(prev => [...prev, songId]);
       onAddSong(song);
-      // Don't switch tabs — keep the user here so they can see the error
-      // toast if matching fails and try a different result.
     }
   }
 
   function isAdded(song) {
-    const songId = song.spotifyId || song.appleMusicId;
-    return addedSongs.includes(songId);
+    return addedSongs.includes(song.spotifyId || song.appleMusicId);
   }
 
   function isPending(song) {
-    const songId = song.spotifyId || song.appleMusicId;
-    return pendingSongs.includes(songId);
+    return pendingSongs.includes(song.spotifyId || song.appleMusicId);
   }
 
   function handleKeyDown(e) {
-    if (e.key === 'Enter') {
-      handleSearch();
-    }
+    if (e.key === 'Enter') handleSearch();
   }
 
   return (
@@ -163,4 +134,5 @@ function Search({ roomCode, onAddSong, onTabChange }) {
     </div>
   );
 }
+
 export default Search;

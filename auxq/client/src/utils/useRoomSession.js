@@ -8,9 +8,11 @@ export default function useRoomSession(code) {
   if (!ref.current) {
     const userName = location.state?.userName || sessionStorage.getItem(`auxq-name-${code}`) || 'Guest';
     const isHost = location.state?.isHost || sessionStorage.getItem(`auxq-host-${code}`) === 'true' || false;
+    const hostPlatform = location.state?.hostPlatform || sessionStorage.getItem(`auxq-platform-${code}`) || null;
     sessionStorage.setItem(`auxq-name-${code}`, userName);
     sessionStorage.setItem(`auxq-host-${code}`, String(isHost));
-    ref.current = { userName, isHost };
+    if (hostPlatform) sessionStorage.setItem(`auxq-platform-${code}`, hostPlatform);
+    ref.current = { userName, isHost, hostPlatform };
   }
 
   return ref.current;
