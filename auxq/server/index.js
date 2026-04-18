@@ -93,6 +93,10 @@ function startPolling(roomCode) {
         lastIsPlaying: curr.isPlaying
       };
 
+      if (curr.isPlaying && curr.durationMs > 0) {
+        io.to(roomCode).emit('playback-progress', { progressMs: curr.progressMs, durationMs: curr.durationMs });
+      }
+
     } catch (err) {
       console.error(`[Poller] Error in room ${roomCode}:`, err.message);
     }

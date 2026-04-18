@@ -166,6 +166,40 @@
   background: var(--color-primary-dark);
 }
 
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.progress-time {
+  font-size: 11px;
+  color: var(--color-text-hint);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  min-width: 28px;
+}
+
+.progress-time:last-child {
+  text-align: right;
+}
+
+.progress-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--color-primary);
+  transition: width 0.9s linear;
+}
+
 .playback-status {
   text-align: center;
   font-size: 13px;

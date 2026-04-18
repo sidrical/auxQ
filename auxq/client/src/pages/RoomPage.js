@@ -26,9 +26,10 @@ function RoomPage({ theme, toggleTheme: toggle }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [hasStarted, setHasStarted] = useState(false);
-  // Tracks whether setQueue has been called for the current Apple Music track.
-  // Uses a ref so it doesn't cause re-renders and doesn't need to be in callback deps.
+  const [progress, setProgress] = useState({ progressMs: 0, durationMs: 0 });
   const appleMusicStartedRef = useRef(false);
+  const progressServerRef = useRef({ progressMs: 0, durationMs: 0, receivedAt: 0 });
+  const progressIntervalRef = useRef(null);
 
   // ---- Socket: room connection ----
   useEffect(() => {
@@ -113,20 +114,71 @@ function RoomPage({ theme, toggleTheme: toggle }) {
     };
   }, [code, isHost, hostPlatform]);
 
-  // Reset Apple Music started flag when the current track changes
   const currentTrackKey = room?.currentTrack?.appleMusicId || room?.currentTrack?.spotifyId;
+  const currentTrackUri = room?.currentTrack?.spotifyUri;
+  const currentTrackAppleMusicId = room?.currentTrack?.appleMusicId;
+  const isPlaying = room?.isPlaying;
+
+  // Reset Apple Music started flag and progress when the current track changes.
+  // Initialize durationMs from the track object so the bar appears immediately.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     appleMusicStartedRef.current = false;
+    const dur = room?.currentTrack?.durationMs || 0;
+    setProgress({ progressMs: 0, durationMs: dur });
+    progressServerRef.current = { progressMs: 0, durationMs: dur, receivedAt: Date.now() };
   }, [currentTrackKey]);
+
+  // Spotify: receive server progress snapshots
+  useEffect(() => {
+    if (hostPlatform === 'apple_music') return;
+    const handleProgress = ({ progressMs, durationMs }) => {
+      progressServerRef.current = { progressMs, durationMs, receivedAt: Date.now() };
+      setProgress({ progressMs, durationMs });
+    };
+    socket.on('playback-progress', handleProgress);
+    return () => socket.off('playback-progress', handleProgress);
+  }, [hostPlatform]);
+
+  // Spotify: interpolate progress forward between server updates
+  useEffect(() => {
+    if (hostPlatform === 'apple_music') return;
+    if (!isPlaying || !currentTrackKey) {
+      clearInterval(progressIntervalRef.current);
+      return;
+    }
+    const id = setInterval(() => {
+      const { progressMs, durationMs, receivedAt } = progressServerRef.current;
+      if (!durationMs) return;
+      const interpolated = Math.min(progressMs + (Date.now() - receivedAt), durationMs);
+      setProgress({ progressMs: interpolated, durationMs });
+    }, 1000);
+    progressIntervalRef.current = id;
+    return () => clearInterval(id);
+  }, [isPlaying, currentTrackKey, hostPlatform]);
+
+  // Apple Music: poll MusicKit player directly (host only)
+  useEffect(() => {
+    if (!isHost || hostPlatform !== 'apple_music') return;
+    if (!isPlaying || !currentTrackKey) {
+      clearInterval(progressIntervalRef.current);
+      return;
+    }
+    const id = setInterval(() => {
+      const mk = window.MusicKit?.getInstance?.();
+      if (!mk) return;
+      const progressMs = (mk.player.currentPlaybackTime || 0) * 1000;
+      const durationMs = (mk.player.currentPlaybackDuration || 0) * 1000;
+      if (durationMs > 0) setProgress({ progressMs, durationMs });
+    }, 1000);
+    progressIntervalRef.current = id;
+    return () => clearInterval(id);
+  }, [isHost, hostPlatform, isPlaying, currentTrackKey]);
 
   const handleAddSong = useCallback((song) => {
     socket.emit('add-song', { code, song: { ...song, addedBy: userName } });
     setActiveTab('queue');
   }, [code, userName]);
-
-  const currentTrackUri = room?.currentTrack?.spotifyUri;
-  const currentTrackAppleMusicId = room?.currentTrack?.appleMusicId;
-  const isPlaying = room?.isPlaying;
 
   const handlePlay = useCallback(async () => {
     try {
@@ -261,6 +313,7 @@ function RoomPage({ theme, toggleTheme: toggle }) {
           onPause={handlePause}
           onSkip={handleSkip}
           onBack={handleBack}
+          progress={progress}
         />
       )}
 
