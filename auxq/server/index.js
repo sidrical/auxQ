@@ -313,6 +313,17 @@ io.on('connection', (socket) => {
     advanceQueue(code);
   });
 
+  socket.on('reorder-queue', ({ code, fromIndex, toIndex }) => {
+    const room = rooms[code];
+    if (!room) return;
+    const queue = room.queue;
+    if (fromIndex < 0 || fromIndex >= queue.length) return;
+    if (toIndex < 0 || toIndex >= queue.length) return;
+    const [moved] = queue.splice(fromIndex, 1);
+    queue.splice(toIndex, 0, moved);
+    io.to(code).emit('room-updated', room);
+  });
+
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id}`);
   });

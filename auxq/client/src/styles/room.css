@@ -220,6 +220,26 @@
   border-bottom: none;
 }
 
+.queue-item.dragging {
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+  border-bottom: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.drag-handle {
+  font-size: 16px;
+  color: var(--color-text-hint);
+  cursor: grab;
+  padding: 0 4px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
 .queue-number {
   font-size: 13px;
   color: var(--color-text-hint);

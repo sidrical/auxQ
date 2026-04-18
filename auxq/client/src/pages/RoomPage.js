@@ -180,6 +180,10 @@ function RoomPage({ theme, toggleTheme: toggle }) {
     setActiveTab('queue');
   }, [code, userName]);
 
+  const handleReorder = useCallback((fromIndex, toIndex) => {
+    socket.emit('reorder-queue', { code, fromIndex, toIndex });
+  }, [code]);
+
   const handlePlay = useCallback(async () => {
     try {
       if (hostPlatform === 'apple_music') {
@@ -322,6 +326,8 @@ function RoomPage({ theme, toggleTheme: toggle }) {
           <Queue
             queue={room?.queue || []}
             onAddClick={() => setActiveTab('search')}
+            isHost={isHost}
+            onReorder={handleReorder}
           />
         )}
         {activeTab === 'search' && (

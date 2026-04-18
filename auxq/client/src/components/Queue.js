@@ -1,17 +1,7 @@
-// Queue.js — Displays the song queue
-//
-// PROPS: When a parent component renders a child like <Queue queue={[...]} />,
-// those values (queue, onAddClick) are called "props" — short for properties.
-// They're how data flows DOWN from parent to child in React.
-// Props are READ-ONLY — a child should never modify its props directly.
-// If the child needs to change something, it calls a function that the parent
-// passed down (like onAddClick), and the parent updates its own state.
-// This one-way data flow is a core React principle.
-
 import React from 'react';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
-function Queue({ queue, onAddClick }) {
-  // If the queue is empty, show a helpful message
+function Queue({ queue, onAddClick, isHost, onReorder }) {
   if (queue.length === 0) {
     return (
       <div className="empty-state">
@@ -25,12 +15,14 @@ function Queue({ queue, onAddClick }) {
     );
   }
 
-  return (
+  function handleDragEnd(result) {
+    if (!result.destination) return;
+    if (result.destination.index === result.source.index) return;
+    onReorder(result.source.index, result.destination.index);
+  }
+
+  const list = (
     <div className="queue">
-      {/* .map() is how you render a list in React.
-          It takes each item in the array and returns JSX for it.
-          The "key" prop is required — React uses it to efficiently track
-          which items changed when the list updates. Use a unique ID, not the index. */}
       {queue.map((song, index) => (
         <div className="queue-item" key={song.id}>
           <div className="queue-number">{index + 1}</div>
@@ -53,13 +45,58 @@ function Queue({ queue, onAddClick }) {
           </div>
         </div>
       ))}
-
       <div style={{ padding: '16px 0' }}>
-        <button className="btn-primary" onClick={onAddClick}>
-          + Add a song
-        </button>
+        <button className="btn-primary" onClick={onAddClick}>+ Add a song</button>
       </div>
     </div>
+  );
+
+  if (!isHost) return list;
+
+  return (
+    <DragDropContext onDragEnd={handleDragEnd}>
+      <Droppable droppableId="queue">
+        {(provided) => (
+          <div className="queue" ref={provided.innerRef} {...provided.droppableProps}>
+            {queue.map((song, index) => (
+              <Draggable key={song.id} draggableId={song.id} index={index}>
+                {(provided, snapshot) => (
+                  <div
+                    className={`queue-item${snapshot.isDragging ? ' dragging' : ''}`}
+                    ref={provided.innerRef}
+                    {...provided.draggableProps}
+                  >
+                    <div className="drag-handle" {...provided.dragHandleProps}>⠿</div>
+                    <div className="queue-number">{index + 1}</div>
+                    <div className="song-artwork">
+                      {song.albumArt ? (
+                        <img src={song.albumArt} alt="" className="album-art-img" />
+                      ) : (
+                        <div className="album-art-placeholder">♪</div>
+                      )}
+                    </div>
+                    <div className="song-info">
+                      <div className="song-title">{song.title}</div>
+                      <div className="song-artist">{song.artist}</div>
+                      <div className="song-meta">
+                        <span className="badge badge-user">{song.addedBy}</span>
+                        <span className={`badge ${song.source === 'spotify' ? 'badge-spotify' : 'badge-apple'}`}>
+                          {song.source === 'spotify' ? 'Spotify' : 'Apple'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Draggable>
+            ))}
+            {provided.placeholder}
+            <div style={{ padding: '16px 0' }}>
+              <button className="btn-primary" onClick={onAddClick}>+ Add a song</button>
+            </div>
+          </div>
+        )}
+      </Droppable>
+    </DragDropContext>
   );
 }
 
