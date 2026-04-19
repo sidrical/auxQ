@@ -1,7 +1,7 @@
 import React from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
-function Queue({ queue, onAddClick, isHost, onReorder }) {
+function Queue({ queue, onAddClick, canReorder, onReorder }) {
   if (queue.length === 0) {
     return (
       <div className="empty-state">
@@ -51,7 +51,7 @@ function Queue({ queue, onAddClick, isHost, onReorder }) {
     </div>
   );
 
-  if (!isHost) return list;
+  if (!canReorder) return list;
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>

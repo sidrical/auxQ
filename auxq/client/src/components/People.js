@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-function People({ users, hostName, isHost, currentUser, onKick, onBan }) {
+function People({ users, hostName, isHost, currentUser, guestReorderEnabled, onKick, onBan, onToggleGuestReorder }) {
   const [confirming, setConfirming] = useState(null); // { user, action }
 
   function handleAction(user, action) {
@@ -15,6 +15,17 @@ function People({ users, hostName, isHost, currentUser, onKick, onBan }) {
 
   return (
     <div className="people-list">
+      {isHost && (
+        <div className="people-settings">
+          <span className="people-settings-label">Guest queue reordering</span>
+          <button
+            className={`toggle-btn ${guestReorderEnabled ? 'toggle-btn--on' : ''}`}
+            onClick={() => onToggleGuestReorder(!guestReorderEnabled)}
+          >
+            {guestReorderEnabled ? 'On' : 'Off'}
+          </button>
+        </div>
+      )}
       {users.map((user) => {
         const isCurrentUser = user === currentUser;
         const isRoomHost = user === hostName;

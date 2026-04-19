@@ -588,6 +588,38 @@
   color: var(--color-text-hint);
 }
 
+.people-settings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 4px;
+}
+
+.people-settings-label {
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.toggle-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-hint);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toggle-btn--on {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
 /* --- Badges --- */
 .badge {
   display: inline-flex;

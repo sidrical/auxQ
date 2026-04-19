@@ -271,6 +271,10 @@ function RoomPage({ theme, toggleTheme: toggle }) {
     socket.emit('ban-user', { code, targetUser });
   }, [code]);
 
+  const handleToggleGuestReorder = useCallback((enabled) => {
+    socket.emit('set-guest-reorder', { code, enabled });
+  }, [code]);
+
   function handleLeave() {
     socket.disconnect();
     navigate('/');
@@ -349,7 +353,7 @@ function RoomPage({ theme, toggleTheme: toggle }) {
           <Queue
             queue={room?.queue || []}
             onAddClick={() => setActiveTab('search')}
-            isHost={isHost}
+            canReorder={isHost || !!room?.guestReorderEnabled}
             onReorder={handleReorder}
           />
         )}
@@ -373,8 +377,10 @@ function RoomPage({ theme, toggleTheme: toggle }) {
             hostName={room?.host}
             isHost={isHost}
             currentUser={userName}
+            guestReorderEnabled={!!room?.guestReorderEnabled}
             onKick={handleKick}
             onBan={handleBan}
+            onToggleGuestReorder={handleToggleGuestReorder}
           />
         )}
       </div>

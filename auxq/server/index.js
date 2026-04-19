@@ -209,6 +209,7 @@ app.post('/api/rooms', optionalToken, async (req, res) => {
     userIPs: {},
     bannedUsers,
     bannedIPs: [],
+    guestReorderEnabled: false,
     createdAt: new Date()
   };
 
@@ -291,6 +292,13 @@ io.on('connection', (socket) => {
         console.error('[Ban] Could not persist ban to DB:', err.message);
       }
     }
+  });
+
+  socket.on('set-guest-reorder', ({ code, enabled }) => {
+    const room = rooms[code];
+    if (!room || socket.id !== room.hostSocketId) return;
+    room.guestReorderEnabled = enabled;
+    io.to(code).emit('room-updated', room);
   });
 
   socket.on('set-host-platform', ({ code, platform }) => {
