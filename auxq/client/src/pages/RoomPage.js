@@ -7,6 +7,7 @@ import Queue from '../components/Queue';
 import Search from '../components/Search';
 import PasteLink from '../components/PasteLink';
 import NowPlaying from '../components/NowPlaying';
+import People from '../components/People';
 import useRoomSession from '../utils/useRoomSession';
 import '../styles/room.css';
 
@@ -14,6 +15,7 @@ const TABS = [
   { key: 'queue', label: 'Queue' },
   { key: 'search', label: 'Search' },
   { key: 'paste', label: 'Paste link' },
+  { key: 'people', label: 'People' },
 ];
 
 function RoomPage({ theme, toggleTheme: toggle }) {
@@ -53,9 +55,21 @@ function RoomPage({ theme, toggleTheme: toggle }) {
       setLoading(false);
     };
 
+    const handleKicked = ({ message }) => {
+      socket.disconnect();
+      navigate('/', { state: { notice: message } });
+    };
+
+    const handleBanned = ({ message }) => {
+      socket.disconnect();
+      navigate('/', { state: { notice: message } });
+    };
+
     socket.on('connect', joinRoom);
     socket.on('room-updated', handleRoomUpdated);
     socket.on('error', handleError);
+    socket.on('kicked', handleKicked);
+    socket.on('banned', handleBanned);
 
     if (!socket.connected) {
       socket.connect();
@@ -67,6 +81,8 @@ function RoomPage({ theme, toggleTheme: toggle }) {
       socket.off('connect', joinRoom);
       socket.off('room-updated', handleRoomUpdated);
       socket.off('error', handleError);
+      socket.off('kicked', handleKicked);
+      socket.off('banned', handleBanned);
       socket.disconnect();
     };
   }, [code, userName, isHost, hostPlatform]);
@@ -247,6 +263,14 @@ function RoomPage({ theme, toggleTheme: toggle }) {
     }
   }, [code, currentTrackUri, isPlaying, hostPlatform]);
 
+  const handleKick = useCallback((targetUser) => {
+    socket.emit('kick-user', { code, targetUser });
+  }, [code]);
+
+  const handleBan = useCallback((targetUser) => {
+    socket.emit('ban-user', { code, targetUser });
+  }, [code]);
+
   function handleLeave() {
     socket.disconnect();
     navigate('/');
@@ -341,6 +365,16 @@ function RoomPage({ theme, toggleTheme: toggle }) {
           <PasteLink
             roomCode={code}
             onAddSong={handleAddSong}
+          />
+        )}
+        {activeTab === 'people' && (
+          <People
+            users={room?.users || []}
+            hostName={room?.host}
+            isHost={isHost}
+            currentUser={userName}
+            onKick={handleKick}
+            onBan={handleBan}
           />
         )}
       </div>

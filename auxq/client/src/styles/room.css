@@ -492,6 +492,102 @@
   text-align: center;
 }
 
+/* --- People --- */
+.people-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.people-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.people-row:last-of-type {
+  border-bottom: none;
+}
+
+.people-info {
+  display: flex;
+  align-items: center;
+}
+
+.people-name {
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.people-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-hint);
+}
+
+.host-tag {
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+}
+
+.people-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.people-btn {
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.people-btn:hover {
+  border-color: var(--color-text-secondary);
+  color: var(--color-text);
+}
+
+.people-btn--danger {
+  color: #E24B4A;
+  border-color: rgba(226, 75, 74, 0.3);
+}
+
+.people-btn--danger:hover {
+  background: rgba(226, 75, 74, 0.08);
+  border-color: #E24B4A;
+}
+
+.people-btn--confirm {
+  background: #E24B4A;
+  border-color: #E24B4A;
+  color: white;
+}
+
+.people-btn--confirm:hover {
+  background: #c93a39;
+  border-color: #c93a39;
+  color: white;
+}
+
+.people-cancel {
+  text-align: center;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--color-text-hint);
+}
+
 /* --- Badges --- */
 .badge {
   display: inline-flex;

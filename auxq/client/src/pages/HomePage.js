@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { createRoom, getRoom } from '../utils/api';
 import { getUser, isLoggedIn, clearSession } from '../utils/auth';
 import Logo from '../components/Logo';
@@ -7,6 +7,8 @@ import '../styles/home.css';
 
 function HomePage() {
   const loggedInUser = isLoggedIn() ? getUser() : null;
+  const location = useLocation();
+  const notice = location.state?.notice || '';
   const [name, setName] = useState(loggedInUser?.username || '');
   const [roomCode, setRoomCode] = useState('');
   const [mode, setMode] = useState('home');
@@ -64,6 +66,12 @@ function HomePage() {
         <Logo />
         <p className="tagline">the cross-platform music queue</p>
       </div>
+
+      {notice && (
+        <div style={{ background: '#E24B4A', color: '#fff', fontSize: 13, padding: '10px 20px', textAlign: 'center' }}>
+          {notice}
+        </div>
+      )}
 
       <div className="home-content">
         {mode === 'home' && (

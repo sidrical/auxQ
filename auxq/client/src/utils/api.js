@@ -35,7 +35,7 @@ export async function requestWithAuth(endpoint, options = {}) {
 // --- Room endpoints ---
 
 export async function createRoom(hostName) {
-  return request('/api/rooms', {
+  return requestWithAuth('/api/rooms', {
     method: 'POST',
     body: { hostName },
   });

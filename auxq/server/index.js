@@ -167,6 +167,8 @@ const spotifyRoutes = require('./routes/spotify-routes');
 const { getValidToken } = spotifyRoutes;
 const appleMusicRoutes = require('./routes/apple-music-routes');
 const authRoutes = require('./routes/auth-routes');
+const { optionalToken } = require('./middleware/auth');
+const User = require('./models/User');
 
 app.use('/api/spotify', spotifyRoutes);
 app.use('/api/apple-music', appleMusicRoutes);
@@ -174,20 +176,39 @@ app.use('/auth', authRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
-app.post('/api/rooms', (req, res) => {
+app.post('/api/rooms', optionalToken, async (req, res) => {
   const { hostName } = req.body;
   if (!hostName) return res.status(400).json({ error: 'Host name is required' });
 
   const code = generateRoomCode();
+
+  let bannedUsers = [];
+  let hostUserId = null;
+
+  if (req.user) {
+    try {
+      const user = await User.findById(req.user.id).select('banList');
+      if (user) {
+        bannedUsers = user.banList || [];
+        hostUserId = req.user.id;
+      }
+    } catch {}
+  }
+
   rooms[code] = {
     code,
     host: hostName,
     hostSocketId: null,
-    hostPlatform: null,  // set to 'spotify' or 'apple_music' when host connects
+    hostUserId,
+    hostPlatform: null,
     queue: [],
     currentTrack: null,
     isPlaying: false,
     users: [hostName],
+    userSockets: {},
+    userIPs: {},
+    bannedUsers,
+    bannedIPs: [],
     createdAt: new Date()
   };
 
@@ -200,19 +221,76 @@ app.get('/api/rooms/:code', (req, res) => {
   res.json({ room });
 });
 
+function getSocketIP(socket) {
+  const forwarded = socket.handshake.headers['x-forwarded-for'];
+  return forwarded ? forwarded.split(',')[0].trim() : socket.handshake.address;
+}
+
 io.on('connection', (socket) => {
   socket.on('join-room', ({ code, userName }) => {
     const room = rooms[code];
     if (!room) { socket.emit('error', { message: 'Room not found' }); return; }
 
+    const ip = getSocketIP(socket);
+
+    if (room.bannedUsers.includes(userName) || room.bannedIPs.includes(ip)) {
+      socket.emit('banned', { message: 'You have been banned from this room.' });
+      return;
+    }
+
     socket.join(code);
     if (!room.users.includes(userName)) room.users.push(userName);
+    room.userSockets[userName] = socket.id;
+    room.userIPs[userName] = ip;
 
-    // Keep host socket ID current so Apple Music play commands reach the right socket on reconnect
     if (userName === room.host) room.hostSocketId = socket.id;
 
     socket.to(code).emit('room-updated', room);
     socket.emit('room-updated', room);
+  });
+
+  socket.on('kick-user', ({ code, targetUser }) => {
+    const room = rooms[code];
+    if (!room || socket.id !== room.hostSocketId) return;
+
+    const targetSocketId = room.userSockets[targetUser];
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('kicked', { message: 'You were removed from the room by the host.' });
+    }
+
+    room.users = room.users.filter(u => u !== targetUser);
+    delete room.userSockets[targetUser];
+    delete room.userIPs[targetUser];
+    io.to(code).emit('room-updated', room);
+    console.log(`[Room ${code}] ${targetUser} was kicked by host`);
+  });
+
+  socket.on('ban-user', async ({ code, targetUser }) => {
+    const room = rooms[code];
+    if (!room || socket.id !== room.hostSocketId) return;
+
+    const targetSocketId = room.userSockets[targetUser];
+    const targetIP = room.userIPs[targetUser];
+
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('banned', { message: 'You have been banned from this room.' });
+    }
+
+    room.users = room.users.filter(u => u !== targetUser);
+    delete room.userSockets[targetUser];
+    delete room.userIPs[targetUser];
+    if (!room.bannedUsers.includes(targetUser)) room.bannedUsers.push(targetUser);
+    if (targetIP && !room.bannedIPs.includes(targetIP)) room.bannedIPs.push(targetIP);
+    io.to(code).emit('room-updated', room);
+    console.log(`[Room ${code}] ${targetUser} (${targetIP}) was banned by host`);
+
+    if (room.hostUserId) {
+      try {
+        await User.findByIdAndUpdate(room.hostUserId, { $addToSet: { banList: targetUser } });
+      } catch (err) {
+        console.error('[Ban] Could not persist ban to DB:', err.message);
+      }
+    }
   });
 
   socket.on('set-host-platform', ({ code, platform }) => {
