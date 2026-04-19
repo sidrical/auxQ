@@ -409,6 +409,7 @@ io.on('connection', (socket) => {
   socket.on('reorder-queue', ({ code, fromIndex, toIndex }) => {
     const room = rooms[code];
     if (!room) return;
+    if (socket.id !== room.hostSocketId && !room.guestReorderEnabled) return;
     const queue = room.queue;
     if (fromIndex < 0 || fromIndex >= queue.length) return;
     if (toIndex < 0 || toIndex >= queue.length) return;
