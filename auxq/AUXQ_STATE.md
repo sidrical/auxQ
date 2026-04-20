@@ -1,5 +1,5 @@
 # AUXQ — Living State Document
-_Last updated: 2026-04-20_
+_Last updated: 2026-04-20 (evening)_
 
 ---
 
@@ -45,7 +45,10 @@ _Last updated: 2026-04-20_
 - Optional — guests can use the app without an account
 - Username/password auth, JWT stored in `localStorage`
 - Account page at `/account` shows connected services (Spotify, Apple Music)
-- **Spotify token persistence**: when a logged-in host connects Spotify, the refresh token is saved to their `User` document; on next visit, `SetupPage` auto-restores the session without re-doing OAuth
+- **Connected services UI** — both rows show label left / buttons right; when disconnected: single "Connect" button; when connected: "Connected ✓" indicator + "Disconnect" button
+- **Spotify account connect** — `GET /auth/connect-spotify` (JWT required) initiates OAuth with state `account|userId` (no room needed); callback detects the `account` prefix, saves tokens to the User document, and redirects to `/account?spotify=connected`; page re-fetches user on return to update UI immediately
+- **Disconnect endpoints** — `DELETE /auth/disconnect-spotify` and `DELETE /auth/disconnect-apple` clear tokens from the User document; client updates local state immediately on success
+- **Spotify token persistence**: when a logged-in host connects Spotify (either via account page or in-room OAuth), the refresh token is saved to their `User` document; on next visit, `SetupPage` auto-restores the session without re-doing OAuth — **Spotify is tried before Apple Music in the auto-connect race**
 - **Apple Music token persistence**: MusicKit user token saved to the User document; `SetupPage` checks `music.isAuthorized` on load and auto-enters the room
 - **Ban list persistence**: when a logged-in host bans a user, the username is written to `User.banList` in MongoDB and re-loaded when the host creates their next room
 
@@ -60,6 +63,7 @@ _Last updated: 2026-04-20_
 ## Recent Changes
 _Inferred from git log and code structure; most recent first._
 
+- **Account-level Spotify connect/disconnect** — new `GET /auth/connect-spotify` and `DELETE /auth/disconnect-spotify` endpoints; account page now has consistent connect/disconnect UI for both Spotify and Apple Music; Spotify OAuth no longer requires being in a room first
 - **MongoDB room persistence** — Room model added (server/models/Room.js); all room state (queue, currentTrack, isPlaying, host tokens, banned users) now written to MongoDB instead of in-memory objects; roomRuntime keeps socket-only state (hostSocketId, userSockets, userIPs) in memory; rooms auto-delete after 24 hours via TTL index
 - **Song removal** — host can remove any queued song; guests can remove only songs they added; currently-playing track cannot be removed; remove-song socket event splices from room.queue and broadcasts updated room
 - **Apple Music progress bar** — host polls MusicKit every 1 s and emits apple-progress socket event; server broadcasts playback-state to room; guests now receive progress snapshots matching the Spotify flow
@@ -103,14 +107,15 @@ auxq/
 │   ├── routes/
 │   │   ├── spotify-routes.js # OAuth flow + getValidToken export
 │   │   ├── apple-music-routes.js # Developer token endpoint
-│   │   └── auth-routes.js    # Register, login, /me, service connect/disconnect
+│   │   └── auth-routes.js    # Register, login, /me, connect-spotify, connect-apple, disconnect endpoints
 │   ├── utils/
 │   │   ├── spotify.js        # getPlaybackState, playTrack
 │   │   └── song-matcher.js   # ISRC + Odesli cross-platform matching
 │   ├── middleware/
 │   │   └── auth.js           # verifyToken, optionalToken
 │   └── models/
-│       └── User.js           # username, hashedPassword, spotify{}, appleMusicToken, banList
+│       ├── User.js           # username, hashedPassword, spotify{}, appleMusicToken, banList
+│       └── Room.js           # full room document (queue, currentTrack, tokens, bannedUsers, TTL)
 └── client/src/
     ├── App.js                # Routes: /, /account, /room/:code/setup, /room/:code, /callback
     ├── pages/
