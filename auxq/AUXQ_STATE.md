@@ -1,5 +1,5 @@
 # AUXQ — Living State Document
-_Last updated: 2026-04-19_
+_Last updated: 2026-04-20_
 
 ---
 
@@ -60,6 +60,7 @@ _Last updated: 2026-04-19_
 ## Recent Changes
 _Inferred from git log and code structure; most recent first._
 
+- **Skip-back fixes** — fixed Apple Music skip-back accidentally resuming when paused (was calling `resumeTrack` instead of `pauseTrack`); fixed progress bar staying at paused position after skip-back by resetting `progress` state and `progressServerRef` to 0 immediately on seek for both Spotify and Apple Music
 - **Guest queue reorder toggle** — `guestReorderEnabled` flag on room object; `set-guest-reorder` socket event; toggle UI in `People.js`; `canReorder` prop threads down to `Queue.js`
 - **Kick and ban system** — `kick-user` / `ban-user` socket events; `bannedUsers` + `bannedIPs` arrays on room; ban persistence to `User.banList` in MongoDB; two-step confirmation UI in `People.js`
 - **User account system** — `User` model, `auth-routes.js`, JWT middleware; `AccountPage` and auth utilities; Spotify/Apple token persistence; `SetupPage` auto-connect flow
@@ -147,5 +148,5 @@ auxq/
 
 ## Next Up
 
-Add a feaure for the ability to remove a song from the queue
-fix some bugs in apple music integration to match the flow of the spotify integration
+- Add ability to remove a song from the queue
+- Fix remaining Apple Music integration bugs to match Spotify flow
