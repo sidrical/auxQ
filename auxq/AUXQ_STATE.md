@@ -26,6 +26,7 @@ _Last updated: 2026-04-20_
 - First song added auto-populates `currentTrack` immediately (no separate "start" step)
 - Auto-advance: Spotify rooms use a server-side poller (3 s interval, 60% progress threshold); Apple Music rooms use a `playbackStateDidChange` event from MusicKit in the host browser
 - **Drag-and-drop reorder** — always available to the host; optionally enabled for guests via a toggle in the People tab
+- **Song removal** — host can remove any queued song; guests can remove only songs they added; currently-playing track cannot be removed
 
 ### Now Playing
 - Displays current track with album art, title, artist, and source badge
@@ -60,6 +61,7 @@ _Last updated: 2026-04-20_
 ## Recent Changes
 _Inferred from git log and code structure; most recent first._
 
+- **Song removal** — `remove-song` socket event; server verifies host or `addedBy` match before splicing from `room.queue`; ✕ button in `Queue.js` shown conditionally per-song
 - **Skip-back fixes** — fixed Apple Music skip-back accidentally resuming when paused (was calling `resumeTrack` instead of `pauseTrack`); fixed progress bar staying at paused position after skip-back by resetting `progress` state and `progressServerRef` to 0 immediately on seek for both Spotify and Apple Music
 - **Guest queue reorder toggle** — `guestReorderEnabled` flag on room object; `set-guest-reorder` socket event; toggle UI in `People.js`; `canReorder` prop threads down to `Queue.js`
 - **Kick and ban system** — `kick-user` / `ban-user` socket events; `bannedUsers` + `bannedIPs` arrays on room; ban persistence to `User.banList` in MongoDB; two-step confirmation UI in `People.js`
@@ -72,7 +74,6 @@ _Inferred from git log and code structure; most recent first._
 
 _Fill in as you discover them. Confirmed code-visible limitations listed below._
 
-- **No queue deletion** — songs can be reordered but not removed once added
 - **Server restart wipes all rooms** — no persistence layer for room/queue state
 - **Rooms never expire** — rooms accumulate in memory until the server restarts; no TTL or cleanup
 - **Apple Music host must keep the tab open** — MusicKit playback dies if the host backgrounds the tab or the browser suspends it
@@ -142,9 +143,10 @@ auxq/
 4. **Playback control** — host-only UI in `NowPlaying.js` calls REST endpoints (Spotify) or MusicKit JS directly (Apple Music), then emits socket events so the server can update `room.isPlaying` and broadcast to all clients.
 5. **Auto-advance** — Spotify rooms: server poller detects natural end via progress heuristic and calls `advanceQueue()`. Apple Music rooms: host browser detects `playbackStateDidChange → completed` and emits `apple-track-ended`.
 6. **Reorder** — client emits `reorder-queue { fromIndex, toIndex }`; server does an in-place splice on `room.queue` and broadcasts the updated room.
+7. **Song removal** — client emits `remove-song { index }`; server checks host or `addedBy` match, splices from `room.queue`, broadcasts updated room.
 
 ---
 
 ## Next Up
 
-- Add ability to remove a song from the queue
+_Nothing queued._

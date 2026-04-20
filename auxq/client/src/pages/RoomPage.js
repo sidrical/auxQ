@@ -202,6 +202,10 @@ function RoomPage({ theme, toggleTheme: toggle }) {
     socket.emit('reorder-queue', { code, fromIndex, toIndex });
   }, [code]);
 
+  const handleRemove = useCallback((index) => {
+    socket.emit('remove-song', { code, index });
+  }, [code]);
+
   const handlePlay = useCallback(async () => {
     try {
       if (hostPlatform === 'apple_music') {
@@ -362,6 +366,9 @@ function RoomPage({ theme, toggleTheme: toggle }) {
             onAddClick={() => setActiveTab('search')}
             canReorder={isHost || !!room?.guestReorderEnabled}
             onReorder={handleReorder}
+            onRemove={handleRemove}
+            isHost={isHost}
+            userName={userName}
           />
         )}
         {activeTab === 'search' && (

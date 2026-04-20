@@ -412,6 +412,19 @@ io.on('connection', (socket) => {
     advanceQueue(code);
   });
 
+  socket.on('remove-song', ({ code, index }) => {
+    const room = rooms[code];
+    if (!room) return;
+    const queue = room.queue;
+    if (index < 0 || index >= queue.length) return;
+    const song = queue[index];
+    const isHost = socket.id === room.hostSocketId;
+    const userName = Object.keys(room.userSockets || {}).find(n => room.userSockets[n] === socket.id);
+    if (!isHost && song.addedBy !== userName) return;
+    queue.splice(index, 1);
+    io.to(code).emit('room-updated', room);
+  });
+
   socket.on('reorder-queue', ({ code, fromIndex, toIndex }) => {
     const room = rooms[code];
     if (!room) return;

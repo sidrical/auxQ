@@ -1,7 +1,7 @@
 import React from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
-function Queue({ queue, onAddClick, canReorder, onReorder }) {
+function Queue({ queue, onAddClick, canReorder, onReorder, onRemove, isHost, userName }) {
   if (queue.length === 0) {
     return (
       <div className="empty-state">
@@ -19,6 +19,25 @@ function Queue({ queue, onAddClick, canReorder, onReorder }) {
     if (!result.destination) return;
     if (result.destination.index === result.source.index) return;
     onReorder(result.source.index, result.destination.index);
+  }
+
+  function canRemoveSong(song) {
+    if (!onRemove) return false;
+    return isHost || song.addedBy === userName;
+  }
+
+  function RemoveButton({ song, index }) {
+    if (!canRemoveSong(song)) return null;
+    return (
+      <button
+        className="queue-remove-btn"
+        onClick={() => onRemove(index)}
+        aria-label="Remove song"
+        title="Remove from queue"
+      >
+        ✕
+      </button>
+    );
   }
 
   const list = (
@@ -43,6 +62,7 @@ function Queue({ queue, onAddClick, canReorder, onReorder }) {
               </span>
             </div>
           </div>
+          <RemoveButton song={song} index={index} />
         </div>
       ))}
       <div style={{ padding: '16px 0' }}>
@@ -85,6 +105,7 @@ function Queue({ queue, onAddClick, canReorder, onReorder }) {
                         </span>
                       </div>
                     </div>
+                    <RemoveButton song={song} index={index} />
                   </div>
                 )}
               </Draggable>
