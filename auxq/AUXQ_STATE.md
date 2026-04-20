@@ -31,7 +31,7 @@ _Last updated: 2026-04-20_
 - Displays current track with album art, title, artist, and source badge
 - Progress bar with elapsed/total time
   - Spotify: server polls every 3 s and broadcasts snapshots; client interpolates forward between updates
-  - Apple Music: host polls `MusicKit.getInstance().player` every 1 s; guests see no progress bar
+  - Apple Music: host polls `MusicKit.getInstance().player` every 1 s and broadcasts via `apple-progress` socket event; guests receive the same snapshots
 - Host-only transport controls: restart (⏮), play/pause, skip (⏭)
 - Guests see a static "♪ Playing / ⏸ Paused" status
 
@@ -75,7 +75,6 @@ _Fill in as you discover them. Confirmed code-visible limitations listed below._
 - **No queue deletion** — songs can be reordered but not removed once added
 - **Server restart wipes all rooms** — no persistence layer for room/queue state
 - **Rooms never expire** — rooms accumulate in memory until the server restarts; no TTL or cleanup
-- **No progress bar for Apple Music guests** — only the host polls MusicKit; guests see only playing/paused status
 - **Apple Music host must keep the tab open** — MusicKit playback dies if the host backgrounds the tab or the browser suspends it
 - **`reorder-queue` has no server-side permission check** — any socket client can send the event regardless of `guestReorderEnabled`; enforcement is client-only
 - **Bans are username-string only** — a banned user can re-join with a different display name (IP ban is a partial mitigation)
@@ -149,4 +148,3 @@ auxq/
 ## Next Up
 
 - Add ability to remove a song from the queue
-- Fix remaining Apple Music integration bugs to match Spotify flow
