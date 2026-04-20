@@ -396,6 +396,12 @@ io.on('connection', (socket) => {
   });
 
   // Host browser reports that a track ended naturally → advance the queue
+  socket.on('apple-progress', ({ code, positionMs, durationMs }) => {
+    const room = rooms[code];
+    if (!room || socket.id !== room.hostSocketId) return;
+    socket.to(code).emit('playback-progress', { progressMs: positionMs, durationMs });
+  });
+
   socket.on('apple-track-ended', ({ code }) => {
     const room = rooms[code];
     if (!room) return;

@@ -144,20 +144,20 @@ function RoomPage({ theme, toggleTheme: toggle }) {
     progressServerRef.current = { progressMs: 0, durationMs: dur, receivedAt: Date.now() };
   }, [currentTrackKey]);
 
-  // Spotify: receive server progress snapshots
+  // Receive server progress snapshots (Spotify always; Apple Music for guests)
   useEffect(() => {
-    if (hostPlatform === 'apple_music') return;
+    if (hostPlatform === 'apple_music' && isHost) return;
     const handleProgress = ({ progressMs, durationMs }) => {
       progressServerRef.current = { progressMs, durationMs, receivedAt: Date.now() };
       setProgress({ progressMs, durationMs });
     };
     socket.on('playback-progress', handleProgress);
     return () => socket.off('playback-progress', handleProgress);
-  }, [hostPlatform]);
+  }, [hostPlatform, isHost]);
 
-  // Spotify: interpolate progress forward between server updates
+  // Interpolate progress forward between server updates (Spotify always; Apple Music for guests)
   useEffect(() => {
-    if (hostPlatform === 'apple_music') return;
+    if (hostPlatform === 'apple_music' && isHost) return;
     if (!isPlaying || !currentTrackKey) {
       clearInterval(progressIntervalRef.current);
       return;
@@ -170,7 +170,7 @@ function RoomPage({ theme, toggleTheme: toggle }) {
     }, 1000);
     progressIntervalRef.current = id;
     return () => clearInterval(id);
-  }, [isPlaying, currentTrackKey, hostPlatform]);
+  }, [isPlaying, currentTrackKey, hostPlatform, isHost]);
 
   // Apple Music: poll MusicKit player directly (host only)
   useEffect(() => {
@@ -182,13 +182,16 @@ function RoomPage({ theme, toggleTheme: toggle }) {
     const id = setInterval(() => {
       const mk = window.MusicKit?.getInstance?.();
       if (!mk) return;
-      const progressMs = (mk.player.currentPlaybackTime || 0) * 1000;
-      const durationMs = (mk.player.currentPlaybackDuration || 0) * 1000;
-      if (durationMs > 0) setProgress({ progressMs, durationMs });
+      const progressMs = (mk.currentPlaybackTime || 0) * 1000;
+      const durationMs = (mk.currentPlaybackDuration || 0) * 1000;
+      if (durationMs > 0) {
+        setProgress({ progressMs, durationMs });
+        socket.emit('apple-progress', { code, positionMs: progressMs, durationMs });
+      }
     }, 1000);
     progressIntervalRef.current = id;
     return () => clearInterval(id);
-  }, [isHost, hostPlatform, isPlaying, currentTrackKey]);
+  }, [isHost, hostPlatform, isPlaying, currentTrackKey, code]);
 
   const handleAddSong = useCallback((song) => {
     socket.emit('add-song', { code, song: { ...song, addedBy: userName } });
