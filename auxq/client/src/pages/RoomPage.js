@@ -249,12 +249,16 @@ function RoomPage({ theme, toggleTheme: toggle }) {
     try {
       if (hostPlatform === 'apple_music') {
         await musickit.seekToStart();
+        setProgress(prev => ({ ...prev, progressMs: 0 }));
+        progressServerRef.current = { ...progressServerRef.current, progressMs: 0, receivedAt: Date.now() };
         if (!isPlaying) {
-          await musickit.resumeTrack();
-          socket.emit('apple-play-started', { code });
+          await musickit.pauseTrack();
+          socket.emit('apple-pause-started', { code });
         }
       } else {
         await api.playOnSpotify(code, currentTrackUri);
+        setProgress(prev => ({ ...prev, progressMs: 0 }));
+        progressServerRef.current = { ...progressServerRef.current, progressMs: 0, receivedAt: Date.now() };
         socket.emit('play-started', { code });
         if (!isPlaying) {
           await api.pauseSpotify(code);
