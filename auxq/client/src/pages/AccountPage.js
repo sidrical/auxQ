@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Logo from '../components/Logo';
 import {
   login, register, clearSession, fetchMe,
-  getUser, isLoggedIn, connectAppleMusic,
+  getUser, isLoggedIn, connectSpotify, connectAppleMusic,
   disconnectSpotify, disconnectApple
 } from '../utils/auth';
 import { getAppleMusicDeveloperToken } from '../utils/api';
@@ -25,6 +25,14 @@ function AccountPage() {
       fetchMe().then(setUser).catch(() => {
         clearSession();
       });
+    }
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('spotify') === 'connected' && isLoggedIn()) {
+      fetchMe().then(setUser).catch(() => {});
+      window.history.replaceState({}, '', '/account');
     }
   }, []);
 
@@ -104,31 +112,33 @@ function AccountPage() {
           <p className="account-section-title">Connected services</p>
 
           <div className="service-row">
-            <div className="service-info">
-              <span className="service-name">Spotify</span>
-              <span className={`service-status ${spotifyConnected ? 'connected' : ''}`}>
-                {spotifyConnected ? 'Connected' : 'Connect when hosting a room'}
-              </span>
+            <span className="service-name">Spotify</span>
+            <div className="service-actions">
+              {spotifyConnected ? (
+                <>
+                  <span className="service-connected">Connected ✓</span>
+                  <button className="btn-disconnect" onClick={handleDisconnectSpotify}>Disconnect</button>
+                </>
+              ) : (
+                <button className="btn-primary" style={{ fontSize: 13, padding: '6px 14px' }} onClick={connectSpotify}>Connect</button>
+              )}
             </div>
-            {spotifyConnected && (
-              <button className="btn-disconnect" onClick={handleDisconnectSpotify}>Disconnect</button>
-            )}
           </div>
 
           <div className="service-row">
-            <div className="service-info">
-              <span className="service-name">Apple Music</span>
-              <span className={`service-status ${appleConnected ? 'connected' : ''}`}>
-                {appleConnected ? 'Connected' : 'Not connected'}
-              </span>
+            <span className="service-name">Apple Music</span>
+            <div className="service-actions">
+              {appleConnected ? (
+                <>
+                  <span className="service-connected">Connected ✓</span>
+                  <button className="btn-disconnect" onClick={handleDisconnectApple}>Disconnect</button>
+                </>
+              ) : (
+                <button className="btn-primary" style={{ fontSize: 13, padding: '6px 14px' }} onClick={handleConnectApple} disabled={connectingApple}>
+                  {connectingApple ? '...' : 'Connect'}
+                </button>
+              )}
             </div>
-            {appleConnected ? (
-              <button className="btn-disconnect" onClick={handleDisconnectApple}>Disconnect</button>
-            ) : (
-              <button className="btn-primary" style={{ fontSize: 13, padding: '6px 14px' }} onClick={handleConnectApple} disabled={connectingApple}>
-                {connectingApple ? '...' : 'Connect'}
-              </button>
-            )}
           </div>
 
           {error && <p className="error-text" style={{ marginTop: 12 }}>{error}</p>}

@@ -60,6 +60,11 @@ export async function fetchMe() {
   return data.user;
 }
 
+export async function connectSpotify() {
+  const data = await authRequest('/auth/connect-spotify');
+  window.location.href = data.url;
+}
+
 export async function connectAppleMusic(appleMusicToken) {
   await authRequest('/auth/connect-apple', { method: 'POST', body: { appleMusicToken } });
   const user = getUser();

@@ -28,6 +28,19 @@ router.get('/callback', async (req, res) => {
   try {
     const tokens = await spotify.getTokens(code);
 
+    if (roomCode === 'account') {
+      if (userId) {
+        await User.findByIdAndUpdate(userId, {
+          spotify: {
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+            expiresAt: Date.now() + (tokens.expiresIn * 1000)
+          }
+        });
+      }
+      return res.redirect(`${clientUrl}/account?spotify=connected`);
+    }
+
     const room = await Room.findOne({ code: roomCode });
     if (!room) return res.redirect(`${clientUrl}/?error=room_not_found`);
 

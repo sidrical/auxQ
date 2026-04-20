@@ -108,6 +108,17 @@
   color: #1db954;
 }
 
+.service-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.service-connected {
+  font-size: 12px;
+  color: #1db954;
+}
+
 .btn-disconnect {
   font-size: 12px;
   padding: 6px 12px;

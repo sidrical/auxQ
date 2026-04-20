@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { verifyToken } = require('../middleware/auth');
+const spotify = require('../utils/spotify');
 
 function signToken(user) {
   return jwt.sign(
@@ -83,6 +84,13 @@ router.post('/connect-apple', verifyToken, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Could not save Apple Music token' });
   }
+});
+
+// GET /auth/connect-spotify — initiate Spotify OAuth for account-level connection
+router.get('/connect-spotify', verifyToken, (req, res) => {
+  const authURL = spotify.getAuthURL();
+  const state = `account|${req.user.id}`;
+  res.json({ url: `${authURL}&state=${encodeURIComponent(state)}` });
 });
 
 // DELETE /auth/disconnect-spotify
