@@ -9,7 +9,7 @@ _Last updated: 2026-04-20_
 - Host creates a room → gets a 4-digit code
 - Guests join by entering the code on the home page
 - Host is directed to `/room/:code/setup` to pick a music platform before entering
-- Room state is entirely in-memory on the server; a server restart destroys all active rooms
+- Room state is persisted to MongoDB; rooms survive server restarts and auto-delete after 24 hours
 
 ### Music platform support
 - **Spotify** — host authenticates via OAuth; playback is driven by the Spotify Web API on the server side; tokens are refreshed automatically
@@ -60,6 +60,7 @@ _Last updated: 2026-04-20_
 ## Recent Changes
 _Inferred from git log and code structure; most recent first._
 
+- **MongoDB room persistence** — Room model added (server/models/Room.js); all room state (queue, currentTrack, isPlaying, host tokens, banned users) now written to MongoDB instead of in-memory objects; roomRuntime keeps socket-only state (hostSocketId, userSockets, userIPs) in memory; rooms auto-delete after 24 hours via TTL index
 - **Song removal** — host can remove any queued song; guests can remove only songs they added; currently-playing track cannot be removed; remove-song socket event splices from room.queue and broadcasts updated room
 - **Apple Music progress bar** — host polls MusicKit every 1 s and emits apple-progress socket event; server broadcasts playback-state to room; guests now receive progress snapshots matching the Spotify flow
 - **Skip-back fixes** — fixed Apple Music skip-back accidentally resuming when paused (was calling `resumeTrack` instead of `pauseTrack`); fixed progress bar staying at paused position after skip-back by resetting `progress` state and `progressServerRef` to 0 immediately on seek for both Spotify and Apple Music
@@ -74,8 +75,6 @@ _Inferred from git log and code structure; most recent first._
 
 _Fill in as you discover them. Confirmed code-visible limitations listed below._
 
-- **Server restart wipes all rooms** — no persistence layer for room/queue state
-- **Rooms never expire** — rooms accumulate in memory until the server restarts; no TTL or cleanup
 - **Apple Music host must keep the tab open** — MusicKit playback dies if the host backgrounds the tab or the browser suspends it
 - **`reorder-queue` has no server-side permission check** — any socket client can send the event regardless of `guestReorderEnabled`; enforcement is client-only
 - **Bans are username-string only** — a banned user can re-join with a different display name (IP ban is a partial mitigation)
@@ -148,5 +147,5 @@ auxq/
 
 ## Next Up
 
-- MongoDB persistence for room/token storage (fixes Render sleep issue)
+- Upgrade Render to paid tier to eliminate cold start delays
 

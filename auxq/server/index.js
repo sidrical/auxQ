@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const { getPlaybackState, playTrack } = require('./utils/spotify');
+const Room = require('./models/Room');
 
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('[MongoDB] Connected'))
@@ -21,11 +22,34 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-const rooms = {};
+// Runtime-only state (not persisted): socket IDs, IP mappings, debounce timestamps
+const roomRuntime = {};
 const roomPollers = {};
 const POLL_INTERVAL_MS = 3000;
 const pollerState = {};
 const lastManualSkipAt = {};
+
+function ensureRuntime(code) {
+  if (!roomRuntime[code]) {
+    roomRuntime[code] = { hostSocketId: null, userSockets: {}, userIPs: {}, lastAdvanceAt: null };
+  }
+  return roomRuntime[code];
+}
+
+function toClientRoom(room, runtime) {
+  const obj = room.toObject ? room.toObject() : { ...room };
+  delete obj._id;
+  delete obj.__v;
+  delete obj.spotifyAccessToken;
+  delete obj.spotifyRefreshToken;
+  delete obj.spotifyExpiresAt;
+  delete obj.spotifyDeviceId;
+  const r = runtime || {};
+  obj.hostSocketId = r.hostSocketId || null;
+  obj.userSockets = r.userSockets || {};
+  obj.userIPs = r.userIPs || {};
+  return obj;
+}
 
 function startPolling(roomCode) {
   if (roomPollers[roomCode]) return;
@@ -38,12 +62,19 @@ function startPolling(roomCode) {
   };
 
   roomPollers[roomCode] = setInterval(async () => {
-    const room = rooms[roomCode];
+    let room;
+    try {
+      room = await Room.findOne({ code: roomCode });
+    } catch (err) {
+      console.error(`[Poller] DB error in room ${roomCode}:`, err.message);
+      return;
+    }
+
     if (!room) { stopPolling(roomCode); return; }
     if (!room.currentTrack) return;
 
     try {
-      const token = await getValidToken(roomCode);
+      const token = await getValidToken(roomCode, room);
       const state = await getPlaybackState(token);
       if (!state || !state.currentTrack) return;
 
@@ -83,12 +114,14 @@ function startPolling(roomCode) {
 
       if (!curr.isPlaying && prev.lastIsPlaying && room.isPlaying) {
         room.isPlaying = false;
-        io.to(roomCode).emit('room-updated', room);
+        await room.save();
+        io.to(roomCode).emit('room-updated', toClientRoom(room, roomRuntime[roomCode]));
       }
 
       if (curr.isPlaying && !prev.lastIsPlaying && !room.isPlaying) {
         room.isPlaying = true;
-        io.to(roomCode).emit('room-updated', room);
+        await room.save();
+        io.to(roomCode).emit('room-updated', toClientRoom(room, roomRuntime[roomCode]));
       }
 
       pollerState[roomCode] = {
@@ -117,10 +150,18 @@ function stopPolling(roomCode) {
 }
 
 async function advanceQueue(roomCode) {
-  const room = rooms[roomCode];
+  let room;
+  try {
+    room = await Room.findOne({ code: roomCode });
+  } catch (err) {
+    console.error(`[advanceQueue] DB error in room ${roomCode}:`, err.message);
+    return;
+  }
   if (!room) return;
 
-  room.currentTrack = room.queue.shift() || null;
+  room.currentTrack = room.queue.length > 0 ? room.queue.shift() : null;
+  room.markModified('queue');
+  room.markModified('currentTrack');
 
   if (room.currentTrack) {
     if (pollerState[roomCode]) {
@@ -129,37 +170,45 @@ async function advanceQueue(roomCode) {
     lastManualSkipAt[roomCode] = Date.now();
 
     if (room.hostPlatform === 'apple_music') {
-      // Apple Music: tell the host's browser to play the next track
-      if (room.hostSocketId) {
-        io.to(room.hostSocketId).emit('apple-play-track', { appleMusicId: room.currentTrack.appleMusicId });
+      const runtime = roomRuntime[roomCode] || {};
+      if (runtime.hostSocketId) {
+        io.to(runtime.hostSocketId).emit('apple-play-track', { appleMusicId: room.currentTrack.appleMusicId });
       }
       room.isPlaying = true;
-      io.to(roomCode).emit('room-updated', room);
+      await room.save();
+      io.to(roomCode).emit('room-updated', toClientRoom(room, roomRuntime[roomCode]));
       console.log(`[Queue] Apple Music — now playing: ${room.currentTrack.title}`);
     } else {
       try {
-        const token = await getValidToken(roomCode);
+        const token = await getValidToken(roomCode, room);
         await playTrack(token, room.currentTrack.spotifyUri);
         room.isPlaying = true;
-        io.to(roomCode).emit('room-updated', room);
+        await room.save();
+        io.to(roomCode).emit('room-updated', toClientRoom(room, roomRuntime[roomCode]));
         console.log(`[Queue] Spotify — now playing: ${room.currentTrack.title}`);
       } catch (err) {
         console.error(`[Queue] Failed to play next track:`, err.message);
         room.isPlaying = false;
-        io.to(roomCode).emit('room-updated', room);
+        await room.save();
+        io.to(roomCode).emit('room-updated', toClientRoom(room, roomRuntime[roomCode]));
       }
     }
   } else {
     room.isPlaying = false;
+    await room.save();
     if (room.hostPlatform !== 'apple_music') stopPolling(roomCode);
-    io.to(roomCode).emit('room-updated', room);
+    io.to(roomCode).emit('room-updated', toClientRoom(room, roomRuntime[roomCode]));
     console.log(`[Queue] Empty in room ${roomCode}`);
   }
 }
 
-function generateRoomCode() {
+async function generateRoomCode() {
   let code;
-  do { code = Math.floor(1000 + Math.random() * 9000).toString(); } while (rooms[code]);
+  let exists = true;
+  while (exists) {
+    code = Math.floor(1000 + Math.random() * 9000).toString();
+    exists = await Room.exists({ code });
+  }
   return code;
 }
 
@@ -180,46 +229,51 @@ app.post('/api/rooms', optionalToken, async (req, res) => {
   const { hostName } = req.body;
   if (!hostName) return res.status(400).json({ error: 'Host name is required' });
 
-  const code = generateRoomCode();
+  try {
+    const code = await generateRoomCode();
 
-  let bannedUsers = [];
-  let hostUserId = null;
+    let bannedUsers = [];
+    let hostUserId = null;
 
-  if (req.user) {
-    try {
-      const user = await User.findById(req.user.id).select('banList');
-      if (user) {
-        bannedUsers = user.banList || [];
-        hostUserId = req.user.id;
-      }
-    } catch {}
+    if (req.user) {
+      try {
+        const user = await User.findById(req.user.id).select('banList');
+        if (user) {
+          bannedUsers = user.banList || [];
+          hostUserId = req.user.id;
+        }
+      } catch {}
+    }
+
+    const room = await Room.create({
+      code,
+      host: hostName,
+      hostUserId,
+      hostPlatform: null,
+      queue: [],
+      currentTrack: null,
+      isPlaying: false,
+      users: [hostName],
+      bannedUsers,
+      bannedIPs: [],
+      guestReorderEnabled: false
+    });
+
+    res.status(201).json({ room: toClientRoom(room, null) });
+  } catch (err) {
+    console.error('[Create room]', err.message);
+    res.status(500).json({ error: 'Failed to create room' });
   }
-
-  rooms[code] = {
-    code,
-    host: hostName,
-    hostSocketId: null,
-    hostUserId,
-    hostPlatform: null,
-    queue: [],
-    currentTrack: null,
-    isPlaying: false,
-    users: [hostName],
-    userSockets: {},
-    userIPs: {},
-    bannedUsers,
-    bannedIPs: [],
-    guestReorderEnabled: false,
-    createdAt: new Date()
-  };
-
-  res.status(201).json({ room: rooms[code] });
 });
 
-app.get('/api/rooms/:code', (req, res) => {
-  const room = rooms[req.params.code];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
-  res.json({ room });
+app.get('/api/rooms/:code', async (req, res) => {
+  try {
+    const room = await Room.findOne({ code: req.params.code });
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+    res.json({ room: toClientRoom(room, roomRuntime[req.params.code]) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch room' });
+  }
 });
 
 function getSocketIP(socket) {
@@ -228,213 +282,299 @@ function getSocketIP(socket) {
 }
 
 io.on('connection', (socket) => {
-  socket.on('join-room', ({ code, userName }) => {
-    const room = rooms[code];
-    if (!room) { socket.emit('error', { message: 'Room not found' }); return; }
+  socket.on('join-room', async ({ code, userName }) => {
+    try {
+      const room = await Room.findOne({ code });
+      if (!room) { socket.emit('error', { message: 'Room not found' }); return; }
 
-    const ip = getSocketIP(socket);
+      const ip = getSocketIP(socket);
 
-    if (room.bannedUsers.includes(userName) || room.bannedIPs.includes(ip)) {
-      socket.emit('banned', { message: 'You have been banned from this room.' });
-      return;
+      if (room.bannedUsers.includes(userName) || room.bannedIPs.includes(ip)) {
+        socket.emit('banned', { message: 'You have been banned from this room.' });
+        return;
+      }
+
+      socket.join(code);
+      if (!room.users.includes(userName)) {
+        room.users.push(userName);
+        await room.save();
+      }
+
+      const runtime = ensureRuntime(code);
+      runtime.userSockets[userName] = socket.id;
+      runtime.userIPs[userName] = ip;
+      if (userName === room.host) runtime.hostSocketId = socket.id;
+
+      socket.to(code).emit('room-updated', toClientRoom(room, runtime));
+      socket.emit('room-updated', toClientRoom(room, runtime));
+    } catch (err) {
+      console.error('[join-room]', err.message);
+      socket.emit('error', { message: 'Failed to join room' });
     }
-
-    socket.join(code);
-    if (!room.users.includes(userName)) room.users.push(userName);
-    room.userSockets[userName] = socket.id;
-    room.userIPs[userName] = ip;
-
-    if (userName === room.host) room.hostSocketId = socket.id;
-
-    socket.to(code).emit('room-updated', room);
-    socket.emit('room-updated', room);
   });
 
-  socket.on('kick-user', ({ code, targetUser }) => {
-    const room = rooms[code];
-    if (!room || socket.id !== room.hostSocketId) return;
+  socket.on('kick-user', async ({ code, targetUser }) => {
+    try {
+      const runtime = roomRuntime[code];
+      if (!runtime || socket.id !== runtime.hostSocketId) return;
 
-    const targetSocketId = room.userSockets[targetUser];
-    if (targetSocketId) {
-      io.to(targetSocketId).emit('kicked', { message: 'You were removed from the room by the host.' });
+      const room = await Room.findOne({ code });
+      if (!room) return;
+
+      const targetSocketId = runtime.userSockets[targetUser];
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('kicked', { message: 'You were removed from the room by the host.' });
+      }
+
+      room.users = room.users.filter(u => u !== targetUser);
+      await room.save();
+      delete runtime.userSockets[targetUser];
+      delete runtime.userIPs[targetUser];
+      io.to(code).emit('room-updated', toClientRoom(room, runtime));
+      console.log(`[Room ${code}] ${targetUser} was kicked by host`);
+    } catch (err) {
+      console.error('[kick-user]', err.message);
+      socket.emit('error', { message: 'Failed to kick user' });
     }
-
-    room.users = room.users.filter(u => u !== targetUser);
-    delete room.userSockets[targetUser];
-    delete room.userIPs[targetUser];
-    io.to(code).emit('room-updated', room);
-    console.log(`[Room ${code}] ${targetUser} was kicked by host`);
   });
 
   socket.on('ban-user', async ({ code, targetUser }) => {
-    const room = rooms[code];
-    if (!room || socket.id !== room.hostSocketId) return;
+    try {
+      const runtime = roomRuntime[code];
+      if (!runtime || socket.id !== runtime.hostSocketId) return;
 
-    const targetSocketId = room.userSockets[targetUser];
-    const targetIP = room.userIPs[targetUser];
+      const room = await Room.findOne({ code });
+      if (!room) return;
 
-    if (targetSocketId) {
-      io.to(targetSocketId).emit('banned', { message: 'You have been banned from this room.' });
-    }
+      const targetSocketId = runtime.userSockets[targetUser];
+      const targetIP = runtime.userIPs[targetUser];
 
-    room.users = room.users.filter(u => u !== targetUser);
-    delete room.userSockets[targetUser];
-    delete room.userIPs[targetUser];
-    if (!room.bannedUsers.includes(targetUser)) room.bannedUsers.push(targetUser);
-    if (targetIP && !room.bannedIPs.includes(targetIP)) room.bannedIPs.push(targetIP);
-    io.to(code).emit('room-updated', room);
-    console.log(`[Room ${code}] ${targetUser} (${targetIP}) was banned by host`);
-
-    if (room.hostUserId) {
-      try {
-        await User.findByIdAndUpdate(room.hostUserId, { $addToSet: { banList: targetUser } });
-      } catch (err) {
-        console.error('[Ban] Could not persist ban to DB:', err.message);
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('banned', { message: 'You have been banned from this room.' });
       }
+
+      room.users = room.users.filter(u => u !== targetUser);
+      if (!room.bannedUsers.includes(targetUser)) room.bannedUsers.push(targetUser);
+      if (targetIP && !room.bannedIPs.includes(targetIP)) room.bannedIPs.push(targetIP);
+      await room.save();
+
+      delete runtime.userSockets[targetUser];
+      delete runtime.userIPs[targetUser];
+      io.to(code).emit('room-updated', toClientRoom(room, runtime));
+      console.log(`[Room ${code}] ${targetUser} (${targetIP}) was banned by host`);
+
+      if (room.hostUserId) {
+        try {
+          await User.findByIdAndUpdate(room.hostUserId, { $addToSet: { banList: targetUser } });
+        } catch (err) {
+          console.error('[Ban] Could not persist ban to DB:', err.message);
+        }
+      }
+    } catch (err) {
+      console.error('[ban-user]', err.message);
+      socket.emit('error', { message: 'Failed to ban user' });
     }
   });
 
-  socket.on('set-guest-reorder', ({ code, enabled }) => {
-    const room = rooms[code];
-    if (!room || socket.id !== room.hostSocketId) return;
-    room.guestReorderEnabled = enabled;
-    io.to(code).emit('room-updated', room);
+  socket.on('set-guest-reorder', async ({ code, enabled }) => {
+    try {
+      const runtime = roomRuntime[code];
+      if (!runtime || socket.id !== runtime.hostSocketId) return;
+
+      const room = await Room.findOne({ code });
+      if (!room) return;
+      room.guestReorderEnabled = enabled;
+      await room.save();
+      io.to(code).emit('room-updated', toClientRoom(room, runtime));
+    } catch (err) {
+      console.error('[set-guest-reorder]', err.message);
+    }
   });
 
-  socket.on('set-host-platform', ({ code, platform }) => {
-    const room = rooms[code];
-    if (!room) return;
-    room.hostPlatform = platform;
-    room.hostSocketId = socket.id;
-    io.to(code).emit('room-updated', room);
-    console.log(`Room ${code} — host platform: ${platform}`);
+  socket.on('set-host-platform', async ({ code, platform }) => {
+    try {
+      const room = await Room.findOne({ code });
+      if (!room) return;
+      room.hostPlatform = platform;
+      await room.save();
+      const runtime = ensureRuntime(code);
+      runtime.hostSocketId = socket.id;
+      io.to(code).emit('room-updated', toClientRoom(room, runtime));
+      console.log(`Room ${code} — host platform: ${platform}`);
+    } catch (err) {
+      console.error('[set-host-platform]', err.message);
+    }
   });
 
   socket.on('add-song', async ({ code, song }) => {
-    const room = rooms[code];
-    if (!room) { socket.emit('error', { message: 'Room not found' }); return; }
+    try {
+      const room = await Room.findOne({ code });
+      if (!room) { socket.emit('error', { message: 'Room not found' }); return; }
 
-    // Match the song to the host's platform if it came from the other platform
-    const hostPlatform = room.hostPlatform || 'spotify';
-    let resolvedSong = song;
+      const hostPlatform = room.hostPlatform || 'spotify';
+      let resolvedSong = song;
 
-    if (song.source !== hostPlatform) {
-      try {
-        const { findMatch } = require('./utils/song-matcher');
-        const token = hostPlatform === 'spotify' ? await getValidToken(code) : null;
-        const matched = await findMatch(song, hostPlatform, token);
-        if (matched && (matched.spotifyUri || matched.appleMusicId)) {
-          resolvedSong = matched;
-          console.log(`Matched "${song.title}" to ${hostPlatform} via ${matched.matchedVia}`);
-        } else {
-          const name = hostPlatform === 'spotify' ? 'Spotify' : 'Apple Music';
-          socket.emit('error', { message: `"${song.title}" couldn't be found on ${name}` });
+      if (song.source !== hostPlatform) {
+        try {
+          const { findMatch } = require('./utils/song-matcher');
+          const token = hostPlatform === 'spotify' ? await getValidToken(code, room) : null;
+          const matched = await findMatch(song, hostPlatform, token);
+          if (matched && (matched.spotifyUri || matched.appleMusicId)) {
+            resolvedSong = matched;
+            console.log(`Matched "${song.title}" to ${hostPlatform} via ${matched.matchedVia}`);
+          } else {
+            const name = hostPlatform === 'spotify' ? 'Spotify' : 'Apple Music';
+            socket.emit('error', { message: `"${song.title}" couldn't be found on ${name}` });
+            return;
+          }
+        } catch (err) {
+          console.error('Song matching error:', err.message);
+          socket.emit('error', { message: 'Failed to match song across platforms' });
           return;
         }
-      } catch (err) {
-        console.error('Song matching error:', err.message);
-        socket.emit('error', { message: 'Failed to match song across platforms' });
-        return;
       }
+
+      room.queue.push({
+        id: Date.now().toString(),
+        ...resolvedSong,
+        addedBy: song.addedBy || 'Anonymous',
+        addedAt: new Date()
+      });
+      room.markModified('queue');
+
+      if (!room.currentTrack) {
+        room.currentTrack = room.queue.shift();
+        room.markModified('queue');
+        room.markModified('currentTrack');
+      }
+
+      await room.save();
+      io.to(code).emit('room-updated', toClientRoom(room, roomRuntime[code]));
+      console.log(`Song added to room ${code}: ${song.title}`);
+    } catch (err) {
+      console.error('[add-song]', err.message);
+      socket.emit('error', { message: 'Failed to add song' });
     }
-
-    room.queue.push({
-      id: Date.now().toString(),
-      ...resolvedSong,
-      addedBy: song.addedBy || 'Anonymous',
-      addedAt: new Date()
-    });
-
-    if (!room.currentTrack) room.currentTrack = room.queue.shift();
-
-    io.to(code).emit('room-updated', room);
-    console.log(`Song added to room ${code}: ${song.title}`);
   });
 
-  socket.on('next-song', ({ code }) => {
-    const room = rooms[code];
-    if (!room) return;
-
-    const now = Date.now();
-    // Swallow rapid repeat skips within 1s — iOS Safari double-tap workaround
-    if (room.lastAdvanceAt && now - room.lastAdvanceAt < 1000) return;
-    room.lastAdvanceAt = now;
-    lastManualSkipAt[code] = now;
-
-    advanceQueue(code);
+  socket.on('next-song', async ({ code }) => {
+    try {
+      const runtime = ensureRuntime(code);
+      const now = Date.now();
+      if (runtime.lastAdvanceAt && now - runtime.lastAdvanceAt < 1000) return;
+      runtime.lastAdvanceAt = now;
+      lastManualSkipAt[code] = now;
+      advanceQueue(code);
+    } catch (err) {
+      console.error('[next-song]', err.message);
+    }
   });
 
-  // Spotify playback events
-  socket.on('play-started', ({ code }) => {
-    const room = rooms[code];
-    if (!room) return;
-    room.isPlaying = true;
-    io.to(code).emit('room-updated', room);
-    if (!room.hostPlatform || room.hostPlatform === 'spotify') startPolling(code);
+  socket.on('play-started', async ({ code }) => {
+    try {
+      const room = await Room.findOne({ code });
+      if (!room) return;
+      room.isPlaying = true;
+      await room.save();
+      io.to(code).emit('room-updated', toClientRoom(room, roomRuntime[code]));
+      if (!room.hostPlatform || room.hostPlatform === 'spotify') startPolling(code);
+    } catch (err) {
+      console.error('[play-started]', err.message);
+    }
   });
 
-  socket.on('pause-started', ({ code }) => {
-    const room = rooms[code];
-    if (!room) return;
-    room.isPlaying = false;
-    io.to(code).emit('room-updated', room);
+  socket.on('pause-started', async ({ code }) => {
+    try {
+      const room = await Room.findOne({ code });
+      if (!room) return;
+      room.isPlaying = false;
+      await room.save();
+      io.to(code).emit('room-updated', toClientRoom(room, roomRuntime[code]));
+    } catch (err) {
+      console.error('[pause-started]', err.message);
+    }
   });
 
-  // Apple Music playback events
-  socket.on('apple-play-started', ({ code }) => {
-    const room = rooms[code];
-    if (!room) return;
-    room.isPlaying = true;
-    io.to(code).emit('room-updated', room);
+  socket.on('apple-play-started', async ({ code }) => {
+    try {
+      const room = await Room.findOne({ code });
+      if (!room) return;
+      room.isPlaying = true;
+      await room.save();
+      io.to(code).emit('room-updated', toClientRoom(room, roomRuntime[code]));
+    } catch (err) {
+      console.error('[apple-play-started]', err.message);
+    }
   });
 
-  socket.on('apple-pause-started', ({ code }) => {
-    const room = rooms[code];
-    if (!room) return;
-    room.isPlaying = false;
-    io.to(code).emit('room-updated', room);
+  socket.on('apple-pause-started', async ({ code }) => {
+    try {
+      const room = await Room.findOne({ code });
+      if (!room) return;
+      room.isPlaying = false;
+      await room.save();
+      io.to(code).emit('room-updated', toClientRoom(room, roomRuntime[code]));
+    } catch (err) {
+      console.error('[apple-pause-started]', err.message);
+    }
   });
 
-  // Host browser reports that a track ended naturally → advance the queue
   socket.on('apple-progress', ({ code, positionMs, durationMs }) => {
-    const room = rooms[code];
-    if (!room || socket.id !== room.hostSocketId) return;
+    const runtime = roomRuntime[code];
+    if (!runtime || socket.id !== runtime.hostSocketId) return;
     socket.to(code).emit('playback-progress', { progressMs: positionMs, durationMs });
   });
 
-  socket.on('apple-track-ended', ({ code }) => {
-    const room = rooms[code];
-    if (!room) return;
-    const now = Date.now();
-    if (room.lastAdvanceAt && now - room.lastAdvanceAt < 1000) return;
-    room.lastAdvanceAt = now;
-    console.log(`[Apple Music] Track ended naturally in room ${code}`);
-    advanceQueue(code);
+  socket.on('apple-track-ended', async ({ code }) => {
+    try {
+      const runtime = ensureRuntime(code);
+      const now = Date.now();
+      if (runtime.lastAdvanceAt && now - runtime.lastAdvanceAt < 1000) return;
+      runtime.lastAdvanceAt = now;
+      console.log(`[Apple Music] Track ended naturally in room ${code}`);
+      advanceQueue(code);
+    } catch (err) {
+      console.error('[apple-track-ended]', err.message);
+    }
   });
 
-  socket.on('remove-song', ({ code, index }) => {
-    const room = rooms[code];
-    if (!room) return;
-    const queue = room.queue;
-    if (index < 0 || index >= queue.length) return;
-    const song = queue[index];
-    const isHost = socket.id === room.hostSocketId;
-    const userName = Object.keys(room.userSockets || {}).find(n => room.userSockets[n] === socket.id);
-    if (!isHost && song.addedBy !== userName) return;
-    queue.splice(index, 1);
-    io.to(code).emit('room-updated', room);
+  socket.on('remove-song', async ({ code, index }) => {
+    try {
+      const room = await Room.findOne({ code });
+      if (!room) return;
+      const queue = room.queue;
+      if (index < 0 || index >= queue.length) return;
+      const song = queue[index];
+      const runtime = roomRuntime[code] || {};
+      const isHost = socket.id === runtime.hostSocketId;
+      const userName = Object.keys(runtime.userSockets || {}).find(n => runtime.userSockets[n] === socket.id);
+      if (!isHost && song.addedBy !== userName) return;
+      queue.splice(index, 1);
+      room.markModified('queue');
+      await room.save();
+      io.to(code).emit('room-updated', toClientRoom(room, runtime));
+    } catch (err) {
+      console.error('[remove-song]', err.message);
+    }
   });
 
-  socket.on('reorder-queue', ({ code, fromIndex, toIndex }) => {
-    const room = rooms[code];
-    if (!room) return;
-    if (socket.id !== room.hostSocketId && !room.guestReorderEnabled) return;
-    const queue = room.queue;
-    if (fromIndex < 0 || fromIndex >= queue.length) return;
-    if (toIndex < 0 || toIndex >= queue.length) return;
-    const [moved] = queue.splice(fromIndex, 1);
-    queue.splice(toIndex, 0, moved);
-    io.to(code).emit('room-updated', room);
+  socket.on('reorder-queue', async ({ code, fromIndex, toIndex }) => {
+    try {
+      const runtime = roomRuntime[code] || {};
+      const room = await Room.findOne({ code });
+      if (!room) return;
+      if (socket.id !== runtime.hostSocketId && !room.guestReorderEnabled) return;
+      const queue = room.queue;
+      if (fromIndex < 0 || fromIndex >= queue.length) return;
+      if (toIndex < 0 || toIndex >= queue.length) return;
+      const [moved] = queue.splice(fromIndex, 1);
+      queue.splice(toIndex, 0, moved);
+      room.markModified('queue');
+      await room.save();
+      io.to(code).emit('room-updated', toClientRoom(room, runtime));
+    } catch (err) {
+      console.error('[reorder-queue]', err.message);
+    }
   });
 
   socket.on('disconnect', () => {
