@@ -32,7 +32,7 @@ _Last updated: 2026-04-20_
 - Progress bar with elapsed/total time
   - Spotify: server polls every 3 s and broadcasts snapshots; client interpolates forward between updates
   - Apple Music: host polls `MusicKit.getInstance().player` every 1 s and broadcasts via `apple-progress` socket event; guests receive the same snapshots
-1- Host-only transport controls: restart (⏮), play/pause, skip (⏭)
+- Host-only transport controls: restart (⏮), play/pause, skip (⏭)
 - Guests see a static "♪ Playing / ⏸ Paused" status
 
 ### People tab
@@ -60,6 +60,8 @@ _Last updated: 2026-04-20_
 ## Recent Changes
 _Inferred from git log and code structure; most recent first._
 
+- **Song removal** — host can remove any queued song; guests can remove only songs they added; currently-playing track cannot be removed; remove-song socket event splices from room.queue and broadcasts updated room
+- **Apple Music progress bar** — host polls MusicKit every 1 s and emits apple-progress socket event; server broadcasts playback-state to room; guests now receive progress snapshots matching the Spotify flow
 - **Skip-back fixes** — fixed Apple Music skip-back accidentally resuming when paused (was calling `resumeTrack` instead of `pauseTrack`); fixed progress bar staying at paused position after skip-back by resetting `progress` state and `progressServerRef` to 0 immediately on seek for both Spotify and Apple Music
 - **Guest queue reorder toggle** — `guestReorderEnabled` flag on room object; `set-guest-reorder` socket event; toggle UI in `People.js`; `canReorder` prop threads down to `Queue.js`
 - **Kick and ban system** — `kick-user` / `ban-user` socket events; `bannedUsers` + `bannedIPs` arrays on room; ban persistence to `User.banList` in MongoDB; two-step confirmation UI in `People.js`
@@ -72,7 +74,6 @@ _Inferred from git log and code structure; most recent first._
 
 _Fill in as you discover them. Confirmed code-visible limitations listed below._
 
-- **No queue deletion** — songs can be reordered but not removed once added
 - **Server restart wipes all rooms** — no persistence layer for room/queue state
 - **Rooms never expire** — rooms accumulate in memory until the server restarts; no TTL or cleanup
 - **Apple Music host must keep the tab open** — MusicKit playback dies if the host backgrounds the tab or the browser suspends it
@@ -146,4 +147,6 @@ auxq/
 ---
 
 ## Next Up
+
+- MongoDB persistence for room/token storage (fixes Render sleep issue)
 
