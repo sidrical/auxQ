@@ -27,6 +27,7 @@ router.get('/callback', async (req, res) => {
 
   try {
     const tokens = await spotify.getTokens(code);
+    console.log('[Spotify] Granted scopes:', tokens.scope);
 
     if (roomCode === 'account') {
       if (userId) {

@@ -85,7 +85,8 @@ async function getTokens(code) {
   return {
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
-    expiresIn: data.expires_in
+    expiresIn: data.expires_in,
+    scope: data.scope
   };
 }
 
