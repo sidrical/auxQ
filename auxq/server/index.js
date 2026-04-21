@@ -434,12 +434,18 @@ io.on('connection', (socket) => {
         }
       }
 
-      room.queue.push({
+      const newSong = {
         id: Date.now().toString(),
         ...resolvedSong,
         addedBy: song.addedBy || 'Anonymous',
         addedAt: new Date()
-      });
+      };
+      const firstPlaylistIdx = room.queue.findIndex(s => s.queueType === 'playlist');
+      if (firstPlaylistIdx !== -1) {
+        room.queue.splice(firstPlaylistIdx, 0, newSong);
+      } else {
+        room.queue.push(newSong);
+      }
       room.markModified('queue');
 
       if (!room.currentTrack) {
@@ -454,6 +460,45 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('[add-song]', err.message);
       socket.emit('error', { message: 'Failed to add song' });
+    }
+  });
+
+  socket.on('queue-playlist', async ({ roomCode, songs, playlistName, addedBy }) => {
+    try {
+      const room = await Room.findOne({ code: roomCode });
+      if (!room) { socket.emit('error', { message: 'Room not found' }); return; }
+
+      const shuffled = [...songs];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      const playlistSongs = shuffled.map(song => ({
+        id: Date.now().toString() + Math.random().toString(36).slice(2),
+        ...song,
+        addedBy: addedBy || 'Anonymous',
+        addedAt: new Date(),
+        queueType: 'playlist'
+      }));
+
+      room.queue.push(...playlistSongs);
+      room.activePlaylist = { name: playlistName, addedBy, totalSongs: songs.length };
+      room.markModified('queue');
+      room.markModified('activePlaylist');
+
+      if (!room.currentTrack && room.queue.length > 0) {
+        room.currentTrack = room.queue.shift();
+        room.markModified('queue');
+        room.markModified('currentTrack');
+      }
+
+      await room.save();
+      io.to(roomCode).emit('room-updated', toClientRoom(room, roomRuntime[roomCode]));
+      console.log(`[Queue] Playlist "${playlistName}" queued in room ${roomCode}: ${songs.length} songs`);
+    } catch (err) {
+      console.error('[queue-playlist]', err.message);
+      socket.emit('error', { message: 'Failed to queue playlist' });
     }
   });
 

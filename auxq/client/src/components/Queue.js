@@ -1,7 +1,7 @@
 import React from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
-function Queue({ queue, onAddClick, canReorder, onReorder, onRemove, isHost, userName }) {
+function Queue({ queue, onAddClick, canReorder, onReorder, onRemove, isHost, userName, activePlaylist }) {
   if (queue.length === 0) {
     return (
       <div className="empty-state">
@@ -40,6 +40,9 @@ function Queue({ queue, onAddClick, canReorder, onReorder, onRemove, isHost, use
     );
   }
 
+  const playlistRemaining = queue.filter(s => s.queueType === 'playlist').length;
+  const showPlaylistIndicator = activePlaylist && playlistRemaining > 0;
+
   const list = (
     <div className="queue">
       {queue.map((song, index) => (
@@ -68,6 +71,11 @@ function Queue({ queue, onAddClick, canReorder, onReorder, onRemove, isHost, use
       <div style={{ padding: '16px 0' }}>
         <button className="btn-primary" onClick={onAddClick}>+ Add a song</button>
       </div>
+      {showPlaylistIndicator && (
+        <div className="playlist-indicator">
+          🎵 {activePlaylist.name} — {playlistRemaining} songs remaining · added by {activePlaylist.addedBy}
+        </div>
+      )}
     </div>
   );
 
@@ -114,6 +122,11 @@ function Queue({ queue, onAddClick, canReorder, onReorder, onRemove, isHost, use
             <div style={{ padding: '16px 0' }}>
               <button className="btn-primary" onClick={onAddClick}>+ Add a song</button>
             </div>
+            {showPlaylistIndicator && (
+              <div className="playlist-indicator">
+                🎵 {activePlaylist.name} — {playlistRemaining} songs remaining · added by {activePlaylist.addedBy}
+              </div>
+            )}
           </div>
         )}
       </Droppable>

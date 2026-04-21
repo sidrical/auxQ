@@ -29,7 +29,8 @@ const SCOPES = [
   'user-read-playback-state',
   'user-modify-playback-state',
   'streaming',
-  'user-read-currently-playing'
+  'user-read-currently-playing',
+  'playlist-read-private'
 ].join(' ');
 
 // Base URL for all Spotify API calls

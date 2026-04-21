@@ -369,6 +369,7 @@ function RoomPage({ theme, toggleTheme: toggle }) {
             onRemove={handleRemove}
             isHost={isHost}
             userName={userName}
+            activePlaylist={room?.activePlaylist}
           />
         )}
         {activeTab === 'search' && (
@@ -377,6 +378,7 @@ function RoomPage({ theme, toggleTheme: toggle }) {
             onAddSong={handleAddSong}
             onTabChange={setActiveTab}
             hostPlatform={hostPlatform}
+            userName={userName}
           />
         )}
         {activeTab === 'paste' && (

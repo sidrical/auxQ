@@ -270,5 +270,75 @@ router.post('/restore-session', verifyToken, async (req, res) => {
 });
 
 
+router.get('/playlists', async (req, res) => {
+  const { roomCode } = req.query;
+  if (!roomCode) return res.status(400).json({ error: 'Room code is required' });
+
+  try {
+    const token = await getValidToken(roomCode);
+    const response = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await response.json();
+    if (data.error) return res.status(400).json({ error: data.error.message });
+
+    const playlists = (data.items || []).map(p => ({
+      id: p.id,
+      name: p.name,
+      description: p.description || '',
+      imageUrl: p.images?.[0]?.url || null,
+      trackCount: p.tracks?.total || 0
+    }));
+
+    res.json({ playlists });
+  } catch (err) {
+    console.error('Playlists error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+router.get('/playlist/:playlistId/tracks', async (req, res) => {
+  const { roomCode } = req.query;
+  const { playlistId } = req.params;
+
+  if (!roomCode || !playlistId) return res.status(400).json({ error: 'Room code and playlist ID are required' });
+
+  try {
+    const token = await getValidToken(roomCode);
+    const tracks = [];
+    let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=next,items(track(id,uri,name,artists,album(images)))`;
+
+    while (url) {
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.error) return res.status(400).json({ error: data.error.message });
+
+      for (const item of (data.items || [])) {
+        const track = item?.track;
+        if (!track || !track.id) continue;
+        tracks.push({
+          spotifyId: track.id,
+          spotifyUri: track.uri,
+          title: track.name,
+          artist: track.artists.map(a => a.name).join(', '),
+          albumArt: track.album?.images?.[0]?.url || null,
+          source: 'spotify'
+        });
+      }
+
+      url = data.next || null;
+    }
+
+    res.json({ tracks });
+  } catch (err) {
+    console.error('Playlist tracks error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 module.exports = router;
 module.exports.getValidToken = getValidToken;

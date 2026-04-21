@@ -88,6 +88,15 @@ export async function pauseSpotify(roomCode) {
   });
 }
 
+export async function getSpotifyPlaylists(roomCode) {
+  return request(`/api/spotify/playlists?roomCode=${roomCode}`);
+}
+
+export async function getPlaylistTracks(roomCode, playlistId) {
+  return request(`/api/spotify/playlist/${playlistId}/tracks?roomCode=${roomCode}`);
+}
+
+
 // --- Apple Music endpoints ---
 
 export async function getAppleMusicDeveloperToken() {

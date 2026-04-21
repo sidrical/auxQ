@@ -16,6 +16,7 @@ const roomSchema = new mongoose.Schema({
   spotifyRefreshToken: { type: String, default: null },
   spotifyExpiresAt: { type: Number, default: null },
   spotifyDeviceId: { type: String, default: null },
+  activePlaylist: { type: mongoose.Schema.Types.Mixed, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 
