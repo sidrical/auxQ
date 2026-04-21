@@ -48,6 +48,7 @@ router.get('/callback', async (req, res) => {
     room.spotifyRefreshToken = tokens.refreshToken;
     room.spotifyExpiresAt = Date.now() + (tokens.expiresIn * 1000);
     room.spotifyDeviceId = null;
+    room.hostPlatform = 'spotify';
 
     try {
       const devices = await spotify.getDevices(tokens.accessToken);

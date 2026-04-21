@@ -28,7 +28,8 @@ function SetupPage() {
         setAutoConnecting('spotify');
         try {
           await restoreSpotifySession(code);
-          navigate(`/room/${code}`, { state: { userName, isHost: true } });
+          sessionStorage.setItem(`auxq-platform-${code}`, 'spotify');
+          navigate(`/room/${code}`, { state: { userName, isHost: true, hostPlatform: 'spotify' } });
           return;
         } catch {
           setAutoConnecting(null);
