@@ -377,7 +377,7 @@ function RoomPage({ theme, toggleTheme: toggle }) {
             roomCode={code}
             onAddSong={handleAddSong}
             onTabChange={setActiveTab}
-            hostPlatform={hostPlatform}
+            hostPlatform={room?.hostPlatform || hostPlatform}
             userName={userName}
           />
         )}
