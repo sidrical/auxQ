@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as api from '../utils/api';
 import socket from '../utils/socket';
+import { isLoggedIn } from '../utils/auth';
 
 function Search({ roomCode, onAddSong, onTabChange, hostPlatform, userName }) {
   const [query, setQuery] = useState('');
@@ -13,6 +14,7 @@ function Search({ roomCode, onAddSong, onTabChange, hostPlatform, userName }) {
   const [searchMode, setSearchMode] = useState('songs');
   const [playlists, setPlaylists] = useState([]);
   const [playlistsLoading, setPlaylistsLoading] = useState(false);
+  const [playlistsNeedReconnect, setPlaylistsNeedReconnect] = useState(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [playlistTracks, setPlaylistTracks] = useState([]);
   const [playlistTracksLoading, setPlaylistTracksLoading] = useState(false);
@@ -48,11 +50,16 @@ function Search({ roomCode, onAddSong, onTabChange, hostPlatform, userName }) {
     async function loadPlaylists() {
       setPlaylistsLoading(true);
       setError('');
+      setPlaylistsNeedReconnect(false);
       try {
         const data = await api.getSpotifyPlaylists(roomCode);
         setPlaylists(data.playlists || []);
       } catch (err) {
-        setError('Failed to load playlists');
+        if (err.message?.includes('Forbidden') || err.message?.includes('403')) {
+          setPlaylistsNeedReconnect(true);
+        } else {
+          setError('Failed to load playlists');
+        }
       } finally {
         setPlaylistsLoading(false);
       }
@@ -140,6 +147,15 @@ function Search({ roomCode, onAddSong, onTabChange, hostPlatform, userName }) {
     setSearchMode(mode);
     setSelectedPlaylist(null);
     setError('');
+  }
+
+  async function handleReconnectSpotify() {
+    try {
+      const data = await api.getSpotifyLoginURL(roomCode);
+      window.location.href = data.url;
+    } catch {
+      setError('Could not reach Spotify. Try again.');
+    }
   }
 
   return (
@@ -259,8 +275,18 @@ function Search({ roomCode, onAddSong, onTabChange, hostPlatform, userName }) {
             </div>
           ) : (
             <div className="playlist-grid-container">
-              {error && <p className="error-text">{error}</p>}
-              {playlistsLoading ? (
+              {playlistsNeedReconnect ? (
+                <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                  <p className="error-text" style={{ marginBottom: 16 }}>
+                    Spotify needs additional permissions to read playlists.
+                  </p>
+                  <button className="btn-primary" onClick={handleReconnectSpotify}>
+                    Reconnect Spotify
+                  </button>
+                </div>
+              ) : error ? (
+                <p className="error-text">{error}</p>
+              ) : playlistsLoading ? (
                 <p className="loading-text">Loading playlists...</p>
               ) : (
                 <div className="playlist-grid">

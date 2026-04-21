@@ -9,6 +9,7 @@ import PasteLink from '../components/PasteLink';
 import NowPlaying from '../components/NowPlaying';
 import People from '../components/People';
 import useRoomSession from '../utils/useRoomSession';
+import { isLoggedIn, fetchMe } from '../utils/auth';
 import '../styles/room.css';
 
 const TABS = [
@@ -25,6 +26,15 @@ function RoomPage({ theme, toggleTheme: toggle }) {
 
   const [room, setRoom] = useState(null);
   const [activeTab, setActiveTab] = useState('queue');
+
+  // After Spotify OAuth redirect, refresh the account cache so auto-connect
+  // picks up the new token (with playlist-read-private scope) on the next visit.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('spotify') === 'connected' && isLoggedIn()) {
+      fetchMe().catch(() => {});
+    }
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [hasStarted, setHasStarted] = useState(false);
