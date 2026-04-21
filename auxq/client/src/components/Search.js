@@ -125,8 +125,9 @@ function Search({ roomCode, onAddSong, onTabChange, hostPlatform, userName }) {
     try {
       const data = await api.getPlaylistTracks(roomCode, playlist.id);
       setPlaylistTracks(data.tracks || []);
-    } catch {
-      setError('Failed to load playlist tracks');
+    } catch (err) {
+      console.error('[Playlist tracks]', err.message);
+      setError(`Failed to load tracks: ${err.message}`);
     } finally {
       setPlaylistTracksLoading(false);
     }
