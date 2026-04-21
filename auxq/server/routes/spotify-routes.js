@@ -283,10 +283,6 @@ router.get('/playlists', async (req, res) => {
     const data = await response.json();
     if (data.error) return res.status(400).json({ error: data.error.message });
 
-    if (data.items?.[0]) {
-      console.log('[Playlists] sample item tracks field:', JSON.stringify(data.items[0].tracks));
-    }
-
     const playlists = (data.items || []).map(p => ({
       id: p.id,
       name: p.name,

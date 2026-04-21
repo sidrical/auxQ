@@ -127,7 +127,12 @@ function Search({ roomCode, onAddSong, onTabChange, hostPlatform, userName }) {
       setPlaylistTracks(data.tracks || []);
     } catch (err) {
       console.error('[Playlist tracks]', err.message);
-      setError(`Failed to load tracks: ${err.message}`);
+      if (err.message?.includes('Forbidden') || err.message?.includes('403')) {
+        setSelectedPlaylist(null);
+        setPlaylistsNeedReconnect(true);
+      } else {
+        setError(`Failed to load tracks: ${err.message}`);
+      }
     } finally {
       setPlaylistTracksLoading(false);
     }
