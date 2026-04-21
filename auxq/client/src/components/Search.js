@@ -166,22 +166,6 @@ function Search({ roomCode, onAddSong, onTabChange, hostPlatform, userName }) {
 
   return (
     <div className="search">
-      {hostPlatform === 'spotify' && (
-        <div className="search-mode-toggle">
-          <button
-            className={`mode-btn${searchMode === 'songs' ? ' active' : ''}`}
-            onClick={() => handleSwitchMode('songs')}
-          >
-            Songs
-          </button>
-          <button
-            className={`mode-btn${searchMode === 'playlists' ? ' active' : ''}`}
-            onClick={() => handleSwitchMode('playlists')}
-          >
-            Playlists
-          </button>
-        </div>
-      )}
 
       {searchMode === 'songs' && (
         <>
@@ -230,7 +214,7 @@ function Search({ roomCode, onAddSong, onTabChange, hostPlatform, userName }) {
         </>
       )}
 
-      {searchMode === 'playlists' && (
+      {searchMode === 'playlists' && false && (
         <>
           {selectedPlaylist ? (
             <div className="playlist-detail">
