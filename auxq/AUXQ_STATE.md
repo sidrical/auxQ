@@ -1,5 +1,5 @@
 # AUXQ — Living State Document
-_Last updated: 2026-04-20 (evening)_
+_Last updated: 2026-04-21_
 
 ---
 
@@ -16,7 +16,7 @@ _Last updated: 2026-04-20 (evening)_
 - **Apple Music** — host authenticates via MusicKit JS in the browser; playback runs client-side in the host's tab (the host browser is the player); server just tells it what to play via Socket.io events
 
 ### Song input (three methods)
-- **Search** — searches Spotify or Apple Music depending on the host's platform; results include album art and source badge
+- **Search** — searches Spotify or Apple Music depending on the host's platform; results include album art and source badge; Playlists tab is built but hidden pending Spotify quota extension
 - **Paste link** — accepts Spotify or Apple Music URLs and resolves them server-side
 - **Cross-platform matching** — if a guest adds a song from the non-host platform, the server tries ISRC match first (exact), then Odesli/Songlink API fallback; failure returns an error toast
 
@@ -63,6 +63,7 @@ _Last updated: 2026-04-20 (evening)_
 ## Recent Changes
 _Inferred from git log and code structure; most recent first._
 
+- **Playlist queuing (hidden — pending Spotify quota extension)** — server-side infrastructure is fully built: `GET /api/spotify/playlists` and `GET /api/spotify/playlist/:id/tracks` endpoints, `queue-playlist` socket event (Fisher-Yates shuffle, `queueType: 'playlist'` flag, `room.activePlaylist` metadata), manual songs always insert before playlist songs in the queue, `Queue.js` shows a playlist indicator (name, songs remaining, added by) at the bottom. Frontend toggle is hidden in `Search.js` because Spotify's `/playlists/{id}/tracks` endpoint returns 403 for apps without Extended Quota Mode approval — even with `playlist-read-private` scope granted. Re-enable by restoring the mode toggle once quota extension is approved.
 - **Account-level Spotify connect/disconnect** — new `GET /auth/connect-spotify` and `DELETE /auth/disconnect-spotify` endpoints; account page now has consistent connect/disconnect UI for both Spotify and Apple Music; Spotify OAuth no longer requires being in a room first
 - **MongoDB room persistence** — Room model added (server/models/Room.js); all room state (queue, currentTrack, isPlaying, host tokens, banned users) now written to MongoDB instead of in-memory objects; roomRuntime keeps socket-only state (hostSocketId, userSockets, userIPs) in memory; rooms auto-delete after 24 hours via TTL index
 - **Song removal** — host can remove any queued song; guests can remove only songs they added; currently-playing track cannot be removed; remove-song socket event splices from room.queue and broadcasts updated room
@@ -152,5 +153,6 @@ auxq/
 
 ## Next Up
 
+- Apply for Spotify Extended Quota Mode to unlock playlist queuing feature
 - Upgrade Render to paid tier to eliminate cold start delays
 
