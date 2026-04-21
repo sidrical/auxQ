@@ -308,14 +308,17 @@ router.get('/playlist/:playlistId/tracks', async (req, res) => {
   try {
     const token = await getValidToken(roomCode);
     const tracks = [];
-    let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=next,items(track(id,uri,name,artists,album(images)))`;
+    let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
 
     while (url) {
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
-      if (data.error) return res.status(400).json({ error: data.error.message });
+      if (data.error) {
+        console.error('[Playlist tracks] Spotify error:', data.error);
+        return res.status(400).json({ error: data.error.message });
+      }
 
       for (const item of (data.items || [])) {
         const track = item?.track;
