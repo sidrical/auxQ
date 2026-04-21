@@ -142,8 +142,6 @@ function Search({ roomCode, onAddSong, onTabChange, hostPlatform, userName }) {
     setError('');
   }
 
-  const hasJwt = !!localStorage.getItem('auxq-jwt');
-
   return (
     <div className="search">
       {hostPlatform === 'spotify' && (
@@ -212,11 +210,7 @@ function Search({ roomCode, onAddSong, onTabChange, hostPlatform, userName }) {
 
       {searchMode === 'playlists' && (
         <>
-          {!hasJwt ? (
-            <p className="error-text" style={{ marginTop: 16 }}>
-              Connect a Spotify account to queue playlists
-            </p>
-          ) : selectedPlaylist ? (
+          {selectedPlaylist ? (
             <div className="playlist-detail">
               <div className="playlist-detail-header">
                 <button className="back-btn" onClick={() => setSelectedPlaylist(null)}>← Back</button>
